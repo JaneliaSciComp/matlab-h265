@@ -63,13 +63,13 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
             "video_info must have dts, num_frames, fmt_ctx_ptr, codec_ctx_ptr, video_stream_idx, and pts_increment fields");
     }
 
-    double *dts_array = mxGetPr(dts_field);
+    int64_t *dts_array = (int64_t *)mxGetData(dts_field);
     int num_frames = (int)mxGetScalar(num_frames_field);
-    pts_increment = (int64_t)mxGetScalar(pts_inc_field);
+    pts_increment = *(int64_t *)mxGetData(pts_inc_field);
 
     /* Extract pointers from struct */
-    fmt_ctx = (AVFormatContext *)(uintptr_t)mxGetScalar(fmt_ctx_field);
-    codec_ctx = (AVCodecContext *)(uintptr_t)mxGetScalar(codec_ctx_field);
+    fmt_ctx = (AVFormatContext *)(uintptr_t)(*(uint64_t *)mxGetData(fmt_ctx_field));
+    codec_ctx = (AVCodecContext *)(uintptr_t)(*(uint64_t *)mxGetData(codec_ctx_field));
     video_stream_idx = (int)mxGetScalar(stream_idx_field);
 
     /* Validate pointers */
@@ -86,7 +86,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
 
     /* Look up the DTS for seeking, and compute target PTS for matching */
-    target_dts = (int64_t)dts_array[target_frame];
+    target_dts = dts_array[target_frame];
     target_pts = (int64_t)target_frame * pts_increment;
 
     /* Allocate frames and packet */
@@ -190,6 +190,64 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
             }
         }
         av_packet_unref(pkt);
+    }
+
+    /* Flush decoder to get remaining buffered frames (needed for B-frames) */
+    avcodec_send_packet(codec_ctx, NULL);
+    while (1) {
+        ret = avcodec_receive_frame(codec_ctx, frame);
+        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+            break;
+        } else if (ret < 0) {
+            break;
+        }
+
+        /* Check if this is the target frame by PTS */
+        if (frame->pts == target_pts) {
+            /* Found the target frame - convert to grayscale and return */
+            int width = codec_ctx->width;
+            int height = codec_ctx->height;
+
+            /* Setup grayscale frame */
+            gray_frame->format = AV_PIX_FMT_GRAY8;
+            gray_frame->width = width;
+            gray_frame->height = height;
+            av_frame_get_buffer(gray_frame, 0);
+
+            /* Create scaler context */
+            sws_ctx = sws_getContext(width, height, codec_ctx->pix_fmt,
+                                     width, height, AV_PIX_FMT_GRAY8,
+                                     SWS_BILINEAR, NULL, NULL, NULL);
+
+            if (!sws_ctx) {
+                av_packet_free(&pkt);
+                av_frame_free(&frame);
+                av_frame_free(&gray_frame);
+                mexErrMsgIdAndTxt("read_ffmpeg_frame:sws", "Could not create scaler context");
+            }
+
+            /* Convert to grayscale */
+            sws_scale(sws_ctx, (const uint8_t * const*)frame->data, frame->linesize,
+                      0, height, gray_frame->data, gray_frame->linesize);
+
+            /* Create MATLAB output array (height x width) */
+            plhs[0] = mxCreateNumericMatrix(height, width, mxUINT8_CLASS, mxREAL);
+            uint8_t *out_data = (uint8_t *)mxGetData(plhs[0]);
+
+            /* Copy data (MATLAB is column-major, so transpose) */
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    out_data[x * height + y] = gray_frame->data[0][y * gray_frame->linesize[0] + x];
+                }
+            }
+
+            /* Cleanup and return */
+            sws_freeContext(sws_ctx);
+            av_packet_free(&pkt);
+            av_frame_free(&frame);
+            av_frame_free(&gray_frame);
+            return;
+        }
     }
 
     /* Frame not found */

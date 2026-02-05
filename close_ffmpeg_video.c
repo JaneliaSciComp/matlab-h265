@@ -40,8 +40,8 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
 
     /* Extract pointers */
-    fmt_ctx = (AVFormatContext *)(uintptr_t)mxGetScalar(fmt_ctx_field);
-    codec_ctx = (AVCodecContext *)(uintptr_t)mxGetScalar(codec_ctx_field);
+    fmt_ctx = (AVFormatContext *)(uintptr_t)(*(uint64_t *)mxGetData(fmt_ctx_field));
+    codec_ctx = (AVCodecContext *)(uintptr_t)(*(uint64_t *)mxGetData(codec_ctx_field));
 
     /* Free resources if not already freed */
     if (codec_ctx) {

@@ -348,33 +348,61 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
                                   "time_base_num", "time_base_den", "frame_rate_num", "frame_rate_den"};
     plhs[0] = mxCreateStructMatrix(1, 1, 13, field_names);
 
+    /* Helper variables for typed arrays */
+    mxArray *mx_int32;
+    mxArray *mx_int64;
+    mxArray *mx_uint64;
+
     /* Set filename */
     mxSetField(plhs[0], 0, "filename", mxCreateString(filename));
 
-    /* Set num_frames */
+    /* Set num_frames, width, height (double for MATLAB convenience) */
     mxSetField(plhs[0], 0, "num_frames", mxCreateDoubleScalar((double)num_frames));
-
-    /* Set width and height */
     mxSetField(plhs[0], 0, "width", mxCreateDoubleScalar((double)width));
     mxSetField(plhs[0], 0, "height", mxCreateDoubleScalar((double)height));
 
-    /* Set dts array */
-    mxArray *dts_mx = mxCreateDoubleMatrix(1, num_frames, mxREAL);
-    double *dts_data = mxGetPr(dts_mx);
+    /* Set dts array (int64) */
+    mxArray *dts_mx = mxCreateNumericMatrix(1, num_frames, mxINT64_CLASS, mxREAL);
+    int64_t *dts_data = (int64_t *)mxGetData(dts_mx);
     for (int i = 0; i < num_frames; i++) {
-        dts_data[i] = (double)dts_array[i];
+        dts_data[i] = dts_array[i];
     }
     mxSetField(plhs[0], 0, "dts", dts_mx);
 
-    /* Store pointers as uint64 for use by read_ffmpeg_frame */
-    mxSetField(plhs[0], 0, "fmt_ctx_ptr", mxCreateDoubleScalar((double)(uintptr_t)fmt_ctx));
-    mxSetField(plhs[0], 0, "codec_ctx_ptr", mxCreateDoubleScalar((double)(uintptr_t)codec_ctx));
+    /* Store pointers as uint64 */
+    mx_uint64 = mxCreateNumericMatrix(1, 1, mxUINT64_CLASS, mxREAL);
+    *(uint64_t *)mxGetData(mx_uint64) = (uint64_t)(uintptr_t)fmt_ctx;
+    mxSetField(plhs[0], 0, "fmt_ctx_ptr", mx_uint64);
+
+    mx_uint64 = mxCreateNumericMatrix(1, 1, mxUINT64_CLASS, mxREAL);
+    *(uint64_t *)mxGetData(mx_uint64) = (uint64_t)(uintptr_t)codec_ctx;
+    mxSetField(plhs[0], 0, "codec_ctx_ptr", mx_uint64);
+
+    /* Set video_stream_idx (double for MATLAB convenience) */
     mxSetField(plhs[0], 0, "video_stream_idx", mxCreateDoubleScalar((double)video_stream_idx));
-    mxSetField(plhs[0], 0, "pts_increment", mxCreateDoubleScalar((double)pts_increment));
-    mxSetField(plhs[0], 0, "time_base_num", mxCreateDoubleScalar((double)time_base.num));
-    mxSetField(plhs[0], 0, "time_base_den", mxCreateDoubleScalar((double)time_base.den));
-    mxSetField(plhs[0], 0, "frame_rate_num", mxCreateDoubleScalar((double)frame_rate.num));
-    mxSetField(plhs[0], 0, "frame_rate_den", mxCreateDoubleScalar((double)frame_rate.den));
+
+    /* Set pts_increment (int64) */
+    mx_int64 = mxCreateNumericMatrix(1, 1, mxINT64_CLASS, mxREAL);
+    *(int64_t *)mxGetData(mx_int64) = pts_increment;
+    mxSetField(plhs[0], 0, "pts_increment", mx_int64);
+
+    /* Set time_base (int32) */
+    mx_int32 = mxCreateNumericMatrix(1, 1, mxINT32_CLASS, mxREAL);
+    *(int32_t *)mxGetData(mx_int32) = time_base.num;
+    mxSetField(plhs[0], 0, "time_base_num", mx_int32);
+
+    mx_int32 = mxCreateNumericMatrix(1, 1, mxINT32_CLASS, mxREAL);
+    *(int32_t *)mxGetData(mx_int32) = time_base.den;
+    mxSetField(plhs[0], 0, "time_base_den", mx_int32);
+
+    /* Set frame_rate (int32) */
+    mx_int32 = mxCreateNumericMatrix(1, 1, mxINT32_CLASS, mxREAL);
+    *(int32_t *)mxGetData(mx_int32) = frame_rate.num;
+    mxSetField(plhs[0], 0, "frame_rate_num", mx_int32);
+
+    mx_int32 = mxCreateNumericMatrix(1, 1, mxINT32_CLASS, mxREAL);
+    *(int32_t *)mxGetData(mx_int32) = frame_rate.den;
+    mxSetField(plhs[0], 0, "frame_rate_den", mx_int32);
 
     /* Free temporary arrays (but NOT fmt_ctx or codec_ctx - they stay open) */
     mxFree(dts_array);

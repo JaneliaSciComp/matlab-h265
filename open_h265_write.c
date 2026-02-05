@@ -242,13 +242,32 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
                                   "state_ptr", "stream_idx"};
     plhs[0] = mxCreateStructMatrix(1, 1, 8, field_names);
 
+    mxArray *mx_uint64;
+
     mxSetField(plhs[0], 0, "filename", mxCreateString(filename));
+
+    /* Set width, height (double for MATLAB convenience) */
     mxSetField(plhs[0], 0, "width", mxCreateDoubleScalar((double)width));
     mxSetField(plhs[0], 0, "height", mxCreateDoubleScalar((double)height));
-    mxSetField(plhs[0], 0, "fmt_ctx_ptr", mxCreateDoubleScalar((double)(uintptr_t)fmt_ctx));
-    mxSetField(plhs[0], 0, "codec_ctx_ptr", mxCreateDoubleScalar((double)(uintptr_t)codec_ctx));
-    mxSetField(plhs[0], 0, "frame_ptr", mxCreateDoubleScalar((double)(uintptr_t)frame));
-    mxSetField(plhs[0], 0, "state_ptr", mxCreateDoubleScalar((double)(uintptr_t)state));
+
+    /* Store pointers as uint64 */
+    mx_uint64 = mxCreateNumericMatrix(1, 1, mxUINT64_CLASS, mxREAL);
+    *(uint64_t *)mxGetData(mx_uint64) = (uint64_t)(uintptr_t)fmt_ctx;
+    mxSetField(plhs[0], 0, "fmt_ctx_ptr", mx_uint64);
+
+    mx_uint64 = mxCreateNumericMatrix(1, 1, mxUINT64_CLASS, mxREAL);
+    *(uint64_t *)mxGetData(mx_uint64) = (uint64_t)(uintptr_t)codec_ctx;
+    mxSetField(plhs[0], 0, "codec_ctx_ptr", mx_uint64);
+
+    mx_uint64 = mxCreateNumericMatrix(1, 1, mxUINT64_CLASS, mxREAL);
+    *(uint64_t *)mxGetData(mx_uint64) = (uint64_t)(uintptr_t)frame;
+    mxSetField(plhs[0], 0, "frame_ptr", mx_uint64);
+
+    mx_uint64 = mxCreateNumericMatrix(1, 1, mxUINT64_CLASS, mxREAL);
+    *(uint64_t *)mxGetData(mx_uint64) = (uint64_t)(uintptr_t)state;
+    mxSetField(plhs[0], 0, "state_ptr", mx_uint64);
+
+    /* Set stream_idx (double for MATLAB convenience) */
     mxSetField(plhs[0], 0, "stream_idx", mxCreateDoubleScalar(0));
 
     mxFree(filename);

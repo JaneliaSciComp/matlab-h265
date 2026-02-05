@@ -25,6 +25,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {
     int start_frame, end_frame, num_frames_to_read;
     int64_t start_dts, end_dts;
+    int64_t pts_increment;
 
     AVFormatContext *fmt_ctx = NULL;
     AVCodecContext *codec_ctx = NULL;
@@ -64,21 +65,23 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     mxArray *fmt_ctx_field = mxGetField(prhs[0], 0, "fmt_ctx_ptr");
     mxArray *codec_ctx_field = mxGetField(prhs[0], 0, "codec_ctx_ptr");
     mxArray *stream_idx_field = mxGetField(prhs[0], 0, "video_stream_idx");
+    mxArray *pts_inc_field = mxGetField(prhs[0], 0, "pts_increment");
 
     if (!dts_field || !num_frames_field || !width_field || !height_field ||
-        !fmt_ctx_field || !codec_ctx_field || !stream_idx_field) {
+        !fmt_ctx_field || !codec_ctx_field || !stream_idx_field || !pts_inc_field) {
         mexErrMsgIdAndTxt("read_ffmpeg_frames:badStruct",
             "video_info must have all required fields");
     }
 
-    double *dts_array = mxGetPr(dts_field);
+    int64_t *dts_array = (int64_t *)mxGetData(dts_field);
     int total_frames = (int)mxGetScalar(num_frames_field);
     width = (int)mxGetScalar(width_field);
     height = (int)mxGetScalar(height_field);
+    pts_increment = *(int64_t *)mxGetData(pts_inc_field);
 
     /* Extract pointers from struct */
-    fmt_ctx = (AVFormatContext *)(uintptr_t)mxGetScalar(fmt_ctx_field);
-    codec_ctx = (AVCodecContext *)(uintptr_t)mxGetScalar(codec_ctx_field);
+    fmt_ctx = (AVFormatContext *)(uintptr_t)(*(uint64_t *)mxGetData(fmt_ctx_field));
+    codec_ctx = (AVCodecContext *)(uintptr_t)(*(uint64_t *)mxGetData(codec_ctx_field));
     video_stream_idx = (int)mxGetScalar(stream_idx_field);
 
     /* Validate pointers */
@@ -105,8 +108,8 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
 
     num_frames_to_read = end_frame - start_frame + 1;
-    start_dts = (int64_t)dts_array[start_frame];
-    end_dts = (int64_t)dts_array[end_frame];
+    start_dts = dts_array[start_frame];
+    end_dts = dts_array[end_frame];
 
     /* Create output array (height x width x num_frames) */
     mwSize dims[3] = {height, width, num_frames_to_read};
@@ -184,12 +187,13 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
                     mexErrMsgIdAndTxt("read_ffmpeg_frames:decode", "Error during decoding");
                 }
 
-                /* Check if this frame is in our target range */
-                int64_t frame_dts = frame->pkt_dts;
+                /* Check if this frame is in our target range using PTS */
+                int64_t frame_pts = frame->pts;
 
-                /* Find which frame index this DTS corresponds to */
+                /* Find which frame index this PTS corresponds to */
                 for (int i = 0; i < num_frames_to_read; i++) {
-                    if (!frame_captured[i] && frame_dts == (int64_t)dts_array[start_frame + i]) {
+                    int64_t target_pts = (int64_t)(start_frame + i) * pts_increment;
+                    if (!frame_captured[i] && frame_pts == target_pts) {
                         /* Convert to grayscale */
                         sws_scale(sws_ctx, (const uint8_t * const*)frame->data, frame->linesize,
                                   0, height, gray_frame->data, gray_frame->linesize);
@@ -208,13 +212,46 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
                     }
                 }
 
-                /* Stop if we've passed the end of our range */
-                if (frame_dts > end_dts && frames_captured == num_frames_to_read) {
+                /* Stop if we have all frames */
+                if (frames_captured == num_frames_to_read) {
                     break;
                 }
             }
         }
         av_packet_unref(pkt);
+    }
+
+    /* Flush decoder to get remaining buffered frames */
+    if (frames_captured < num_frames_to_read) {
+        avcodec_send_packet(codec_ctx, NULL);
+        while (frames_captured < num_frames_to_read) {
+            ret = avcodec_receive_frame(codec_ctx, frame);
+            if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+                break;
+            } else if (ret < 0) {
+                break;
+            }
+
+            int64_t frame_pts = frame->pts;
+            for (int i = 0; i < num_frames_to_read; i++) {
+                int64_t target_pts = (int64_t)(start_frame + i) * pts_increment;
+                if (!frame_captured[i] && frame_pts == target_pts) {
+                    sws_scale(sws_ctx, (const uint8_t * const*)frame->data, frame->linesize,
+                              0, height, gray_frame->data, gray_frame->linesize);
+
+                    uint8_t *frame_out = out_data + i * frame_size;
+                    for (int y = 0; y < height; y++) {
+                        for (int x = 0; x < width; x++) {
+                            frame_out[x * height + y] = gray_frame->data[0][y * gray_frame->linesize[0] + x];
+                        }
+                    }
+
+                    frame_captured[i] = 1;
+                    frames_captured++;
+                    break;
+                }
+            }
+        }
     }
 
     /* Cleanup */

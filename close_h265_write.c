@@ -50,10 +50,10 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
             "Writer struct is missing required fields");
     }
 
-    fmt_ctx = (AVFormatContext *)(uintptr_t)mxGetScalar(fmt_ctx_field);
-    codec_ctx = (AVCodecContext *)(uintptr_t)mxGetScalar(codec_ctx_field);
-    frame = (AVFrame *)(uintptr_t)mxGetScalar(frame_field);
-    state = (void *)(uintptr_t)mxGetScalar(state_field);
+    fmt_ctx = (AVFormatContext *)(uintptr_t)(*(uint64_t *)mxGetData(fmt_ctx_field));
+    codec_ctx = (AVCodecContext *)(uintptr_t)(*(uint64_t *)mxGetData(codec_ctx_field));
+    frame = (AVFrame *)(uintptr_t)(*(uint64_t *)mxGetData(frame_field));
+    state = (void *)(uintptr_t)(*(uint64_t *)mxGetData(state_field));
     stream_idx = (int)mxGetScalar(stream_idx_field);
 
     /* Check if already closed */
