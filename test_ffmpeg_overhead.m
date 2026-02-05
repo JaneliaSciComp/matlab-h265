@@ -1,35 +1,24 @@
-% Test FFmpeg reader overhead breakdown
+function test_ffmpeg_overhead()
+% TEST_FFMPEG_OVERHEAD Test FFmpeg reader overhead with random access
+%   Throws error on failure. Skips if test files are missing.
+
+if ~isfile('movie_keyint10.mp4')
+    return;  % Skip if file not available
+end
 
 vi = open_ffmpeg_video('movie_keyint10.mp4');
 
-% Time just opening the file (what read_ffmpeg_frame does internally)
-fprintf('Testing overhead components...\n\n');
-
-% Full read_ffmpeg_frame calls
+% Read 20 random frames to verify seeking works
 rng(42);
-indices = randperm(vi.num_frames, 100);
-times = zeros(100, 1);
-for i = 1:100
-    tic;
+num_test = min(20, vi.num_frames);
+indices = randperm(vi.num_frames, num_test);
+
+for i = 1:num_test
     frame = read_ffmpeg_frame(vi, indices(i));
-    times(i) = toc * 1000;
+    assert(size(frame, 1) == vi.height, 'Frame height mismatch at index %d', indices(i));
+    assert(size(frame, 2) == vi.width, 'Frame width mismatch at index %d', indices(i));
 end
-fprintf('read_ffmpeg_frame (keyint=10): mean=%.2f ms, median=%.2f ms\n', mean(times), median(times));
 
-% Compare to keyint=50
-vi50 = open_ffmpeg_video('movie_keyint50.mp4');
-for i = 1:100
-    tic;
-    frame = read_ffmpeg_frame(vi50, indices(i));
-    times(i) = toc * 1000;
-end
-fprintf('read_ffmpeg_frame (keyint=50): mean=%.2f ms, median=%.2f ms\n', mean(times), median(times));
+close_ffmpeg_video(vi);
 
-% For reference, how long does just open_ffmpeg_video take?
-times = zeros(20, 1);
-for i = 1:20
-    tic;
-    vi_tmp = open_ffmpeg_video('movie_keyint10.mp4');
-    times(i) = toc * 1000;
 end
-fprintf('\nopen_ffmpeg_video alone:       mean=%.2f ms, median=%.2f ms\n', mean(times), median(times));

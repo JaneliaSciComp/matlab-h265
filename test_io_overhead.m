@@ -1,41 +1,36 @@
-% Test raw file I/O speed vs VideoReader overhead
+function test_io_overhead()
+% TEST_IO_OVERHEAD Test file I/O operations
+%   Throws error on failure.
 
-% Create a 1MB test file
+% Create a test file
+test_file = '/tmp/test_io_overhead.bin';
 data = uint8(zeros(1024, 1024));
-f = fopen('/tmp/test_1mb.bin', 'wb');
+f = fopen(test_file, 'wb');
+if f < 0
+    error('test_io_overhead:fopen', 'Could not create test file');
+end
 fwrite(f, data, 'uint8');
 fclose(f);
 
-% Time 100 random reads of 1MB (open/read/close each time)
-times = zeros(100, 1);
-for i = 1:100
-    tic;
-    f = fopen('/tmp/test_1mb.bin', 'rb');
+% Test read with open/close each time
+for i = 1:10
+    f = fopen(test_file, 'rb');
+    assert(f > 0, 'Could not open test file for reading');
     d = fread(f, [1024, 1024], 'uint8');
     fclose(f);
-    times(i) = toc * 1000;
+    assert(numel(d) == 1024*1024, 'Read wrong number of bytes');
 end
-fprintf('Raw file I/O (open+read+close 1 MB): mean=%.2f ms, median=%.2f ms\n', mean(times), median(times));
 
-% Time with file already open
-f = fopen('/tmp/test_1mb.bin', 'rb');
-for i = 1:100
-    tic;
+% Test read with file kept open
+f = fopen(test_file, 'rb');
+for i = 1:10
     fseek(f, 0, 'bof');
     d = fread(f, [1024, 1024], 'uint8');
-    times(i) = toc * 1000;
+    assert(numel(d) == 1024*1024, 'Read wrong number of bytes');
 end
 fclose(f);
-fprintf('Raw file I/O (seek+read 1 MB):       mean=%.2f ms, median=%.2f ms\n', mean(times), median(times));
 
-% Now time VideoReader read() calls
-vr = VideoReader('movie.avi');
-times = zeros(100, 1);
-rng(42);
-indices = randperm(vr.NumFrames, 100);
-for i = 1:100
-    tic;
-    frame = read(vr, indices(i));
-    times(i) = toc * 1000;
+% Cleanup
+delete(test_file);
+
 end
-fprintf('VideoReader read() random frames:    mean=%.2f ms, median=%.2f ms\n', mean(times), median(times));
