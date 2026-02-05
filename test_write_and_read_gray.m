@@ -40,7 +40,7 @@ assert(abs(writer.duration() - frame_count/frame_rate) < 0.001, 'Writer duration
 clear writer;  % Flush and close
 
 % Read back the file
-reader = FfmpegReader(output_file);
+reader = H265Reader(output_file);
 
 % Check reader properties
 assert(~isempty(reader.filename), 'Reader filename not set');
@@ -98,7 +98,7 @@ for i = 1:frame_count2
 end
 clear writer2;
 
-reader2 = FfmpegReader(output_file2);
+reader2 = H265Reader(output_file2);
 assert(reader2.num_frames == frame_count2, 'Second file frame count mismatch');
 assert(reader2.width == width2, 'Second file width mismatch');
 assert(reader2.height == height2, 'Second file height mismatch');

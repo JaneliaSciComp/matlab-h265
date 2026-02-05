@@ -1,9 +1,9 @@
-classdef FfmpegReader < handle
+classdef H265Reader < handle
     % FFMPEGREADER Wrapper for FFmpeg video reading MEX functions
     %   Ensures proper resource cleanup when object is destroyed.
     %
     %   Example:
-    %       vid = FfmpegReader('movie.mp4');
+    %       vid = H265Reader('movie.mp4');
     %       frame = vid.read(1);
     %       frames = vid.read(1, 100);  % batch read
     %       clear vid;  % automatically closes
@@ -29,9 +29,9 @@ classdef FfmpegReader < handle
     end
 
     methods
-        function obj = FfmpegReader(filename)
+        function obj = H265Reader(filename)
             % FFMPEGREADER Open a video file for reading
-            %   vid = FfmpegReader(filename)
+            %   vid = H265Reader(filename)
 
             obj.video_info = open_ffmpeg_video(filename);
 
