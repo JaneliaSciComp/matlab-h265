@@ -41,18 +41,4 @@ fprintf('========================================\n');
 fprintf('Results: %d/%d tests passed\n', length(passed), num_tests);
 fprintf('========================================\n');
 
-if isempty(failed)
-    fprintf('All tests passed.\n');
-else
-    fprintf('\nPassed (%d):\n', length(passed));
-    for i = 1:length(passed)
-        fprintf('  %s\n', passed{i});
-    end
-
-    fprintf('\nFailed (%d):\n', length(failed));
-    for i = 1:length(failed)
-        fprintf('  %s: %s\n', failed{i}, errors{i});
-    end
-end
-
 end
