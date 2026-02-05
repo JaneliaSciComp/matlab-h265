@@ -20,6 +20,10 @@ classdef FfmpegReader < handle
         pts_increment
     end
 
+    properties (Dependent)
+        frame_rate
+    end
+
     properties (Access = private)
         video_info  % struct from open_ffmpeg_video
     end
@@ -64,16 +68,15 @@ classdef FfmpegReader < handle
             close_ffmpeg_video(obj.video_info);
         end
 
-        function fr = frame_rate(obj)
-            % FRAME_RATE Get frame rate as a double
-            %   fr = vid.frame_rate()
+        function fr = get.frame_rate(obj)
+            % GET.FRAME_RATE Get frame rate as a double
             fr = double(obj.frame_rate_num) / double(obj.frame_rate_den);
         end
 
         function d = duration(obj)
             % DURATION Get video duration in seconds
             %   d = vid.duration()
-            d = obj.num_frames / obj.frame_rate();
+            d = obj.num_frames / obj.frame_rate;
         end
     end
 end
