@@ -158,12 +158,20 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 
     int64_t pts_increment = numerator / denominator;
 
-    /* Find decoder */
+    /* Find software decoder (explicitly avoid hardware decoders) */
     codec = avcodec_find_decoder(video_stream->codecpar->codec_id);
     if (!codec) {
         avformat_close_input(&fmt_ctx);
         mxFree(filename);
         mexErrMsgIdAndTxt("open_ffmpeg_video:noCodec", "Could not find decoder");
+    }
+
+    /* Verify this is a software decoder, not hardware */
+    if (codec->capabilities & AV_CODEC_CAP_HARDWARE) {
+        avformat_close_input(&fmt_ctx);
+        mxFree(filename);
+        mexErrMsgIdAndTxt("open_ffmpeg_video:hwDecoder",
+            "Got hardware decoder '%s', but software decoding is required", codec->name);
     }
 
     /* Allocate codec context */
