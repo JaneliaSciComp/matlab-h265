@@ -137,8 +137,26 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         mexErrMsgIdAndTxt("open_ffmpeg_video:noFrameRate", "Could not determine frame rate");
     }
 
-    /* pts_increment = time_base / frame_rate (in time_base units per frame) */
-    int64_t pts_increment = av_rescale_q(1, av_inv_q(frame_rate), video_stream->time_base);
+    /* pts_increment = time_base / frame_rate (in time_base units per frame)
+     * = (time_base.den * frame_rate.den) / (time_base.num * frame_rate.num)
+     * For exact integer result, the division must have no remainder. */
+    AVRational time_base = video_stream->time_base;
+    int64_t numerator = (int64_t)time_base.den * frame_rate.den;
+    int64_t denominator = (int64_t)time_base.num * frame_rate.num;
+
+    if (numerator % denominator != 0) {
+        avcodec_free_context(&codec_ctx);
+        avformat_close_input(&fmt_ctx);
+        mxFree(filename);
+        mexErrMsgIdAndTxt("open_ffmpeg_video:badFrameRate",
+            "Frame rate (%d/%d) and time base (%d/%d) are incompatible. "
+            "PTS increment would be non-integer: %lld/%lld. "
+            "Re-encode with a compatible frame rate.",
+            frame_rate.num, frame_rate.den, time_base.num, time_base.den,
+            (long long)numerator, (long long)denominator);
+    }
+
+    int64_t pts_increment = numerator / denominator;
 
     /* Find decoder */
     codec = avcodec_find_decoder(video_stream->codecpar->codec_id);
