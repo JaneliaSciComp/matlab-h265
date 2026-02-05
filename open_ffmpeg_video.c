@@ -252,19 +252,17 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         mexErrMsgIdAndTxt("open_ffmpeg_video:noFrames", "No frames found in video");
     }
 
-    /* Allocate DTS array indexed by frame number */
+    /* Allocate DTS array and frame count array */
     int64_t *dts_array = (int64_t *)mxMalloc(num_frames * sizeof(int64_t));
-    if (!dts_array) {
+    int *frame_count = (int *)mxCalloc(num_frames, sizeof(int));  /* initialized to 0 */
+    if (!dts_array || !frame_count) {
+        if (dts_array) mxFree(dts_array);
+        if (frame_count) mxFree(frame_count);
         av_packet_free(&pkt);
         avcodec_free_context(&codec_ctx);
         avformat_close_input(&fmt_ctx);
         mxFree(filename);
         mexErrMsgIdAndTxt("open_ffmpeg_video:allocArrays", "Could not allocate arrays");
-    }
-
-    /* Initialize to -1 to detect any missing frames */
-    for (int i = 0; i < num_frames; i++) {
-        dts_array[i] = -1;
     }
 
     /* Seek back to beginning */
@@ -280,6 +278,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
             if (pts % pts_increment != 0) {
                 av_packet_unref(pkt);
                 av_packet_free(&pkt);
+                mxFree(frame_count);
                 mxFree(dts_array);
                 avcodec_free_context(&codec_ctx);
                 avformat_close_input(&fmt_ctx);
@@ -294,6 +293,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 
             if (frame_num >= 0 && frame_num < num_frames) {
                 dts_array[frame_num] = pkt->dts;
+                frame_count[frame_num]++;
             }
         }
         av_packet_unref(pkt);
@@ -301,21 +301,33 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 
     av_packet_free(&pkt);
 
-    /* Verify DTS array is fully populated */
-    int missing_count = 0;
+    /* Verify each frame has exactly one packet */
+    int pts_missing_count = 0;
+    int pts_duplicate_count = 0;
     for (int i = 0; i < num_frames; i++) {
-        if (dts_array[i] == -1) {
-            missing_count++;
+        if (frame_count[i] == 0) {
+            pts_missing_count++;
+        } else if (frame_count[i] > 1) {
+            pts_duplicate_count++;
         }
     }
-    if (missing_count > 0) {
+    mxFree(frame_count);
+
+    if (pts_missing_count > 0) {
         mxFree(dts_array);
         avcodec_free_context(&codec_ctx);
         avformat_close_input(&fmt_ctx);
         mxFree(filename);
-        mexErrMsgIdAndTxt("open_ffmpeg_video:incompleteDTS",
-                          "DTS lookup table incomplete: %d of %d frames missing",
-                          missing_count, num_frames);
+        mexErrMsgIdAndTxt("open_ffmpeg_video:missingPTS",
+            "%d of %d frames have no PTS mapping", pts_missing_count, num_frames);
+    }
+    if (pts_duplicate_count > 0) {
+        mxFree(dts_array);
+        avcodec_free_context(&codec_ctx);
+        avformat_close_input(&fmt_ctx);
+        mxFree(filename);
+        mexErrMsgIdAndTxt("open_ffmpeg_video:duplicatePTS",
+            "%d frames have duplicate PTS mappings", pts_duplicate_count);
     }
 
     /* Seek back to beginning for subsequent reads */
