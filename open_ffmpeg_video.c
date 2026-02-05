@@ -344,8 +344,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 
     /* Create output struct - keep fmt_ctx and codec_ctx open */
     const char *field_names[] = {"filename", "num_frames", "width", "height", "dts",
-                                  "fmt_ctx_ptr", "codec_ctx_ptr", "video_stream_idx"};
-    plhs[0] = mxCreateStructMatrix(1, 1, 8, field_names);
+                                  "fmt_ctx_ptr", "codec_ctx_ptr", "video_stream_idx", "pts_increment",
+                                  "time_base_num", "time_base_den", "frame_rate_num", "frame_rate_den"};
+    plhs[0] = mxCreateStructMatrix(1, 1, 13, field_names);
 
     /* Set filename */
     mxSetField(plhs[0], 0, "filename", mxCreateString(filename));
@@ -369,6 +370,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     mxSetField(plhs[0], 0, "fmt_ctx_ptr", mxCreateDoubleScalar((double)(uintptr_t)fmt_ctx));
     mxSetField(plhs[0], 0, "codec_ctx_ptr", mxCreateDoubleScalar((double)(uintptr_t)codec_ctx));
     mxSetField(plhs[0], 0, "video_stream_idx", mxCreateDoubleScalar((double)video_stream_idx));
+    mxSetField(plhs[0], 0, "pts_increment", mxCreateDoubleScalar((double)pts_increment));
+    mxSetField(plhs[0], 0, "time_base_num", mxCreateDoubleScalar((double)time_base.num));
+    mxSetField(plhs[0], 0, "time_base_den", mxCreateDoubleScalar((double)time_base.den));
+    mxSetField(plhs[0], 0, "frame_rate_num", mxCreateDoubleScalar((double)frame_rate.num));
+    mxSetField(plhs[0], 0, "frame_rate_den", mxCreateDoubleScalar((double)frame_rate.den));
 
     /* Free temporary arrays (but NOT fmt_ctx or codec_ctx - they stay open) */
     mxFree(dts_array);

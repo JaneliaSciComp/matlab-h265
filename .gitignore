@@ -11,6 +11,7 @@
 
 # MATLAB generated
 *.asv
+*.log
 
 # Claude config
 .claude/

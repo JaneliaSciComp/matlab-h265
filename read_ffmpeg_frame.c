@@ -23,6 +23,8 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {
     int target_frame;
     int64_t target_dts;
+    int64_t target_pts;
+    int64_t pts_increment;
 
     AVFormatContext *fmt_ctx = NULL;
     AVCodecContext *codec_ctx = NULL;
@@ -54,14 +56,16 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     mxArray *fmt_ctx_field = mxGetField(prhs[0], 0, "fmt_ctx_ptr");
     mxArray *codec_ctx_field = mxGetField(prhs[0], 0, "codec_ctx_ptr");
     mxArray *stream_idx_field = mxGetField(prhs[0], 0, "video_stream_idx");
+    mxArray *pts_inc_field = mxGetField(prhs[0], 0, "pts_increment");
 
-    if (!dts_field || !num_frames_field || !fmt_ctx_field || !codec_ctx_field || !stream_idx_field) {
+    if (!dts_field || !num_frames_field || !fmt_ctx_field || !codec_ctx_field || !stream_idx_field || !pts_inc_field) {
         mexErrMsgIdAndTxt("read_ffmpeg_frame:badStruct",
-            "video_info must have dts, num_frames, fmt_ctx_ptr, codec_ctx_ptr, and video_stream_idx fields");
+            "video_info must have dts, num_frames, fmt_ctx_ptr, codec_ctx_ptr, video_stream_idx, and pts_increment fields");
     }
 
     double *dts_array = mxGetPr(dts_field);
     int num_frames = (int)mxGetScalar(num_frames_field);
+    pts_increment = (int64_t)mxGetScalar(pts_inc_field);
 
     /* Extract pointers from struct */
     fmt_ctx = (AVFormatContext *)(uintptr_t)mxGetScalar(fmt_ctx_field);
@@ -81,8 +85,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         mexErrMsgIdAndTxt("read_ffmpeg_frame:invalidIndex", "Frame index must be between 1 and %d", num_frames);
     }
 
-    /* Look up the DTS for this frame */
+    /* Look up the DTS for seeking, and compute target PTS for matching */
     target_dts = (int64_t)dts_array[target_frame];
+    target_pts = (int64_t)target_frame * pts_increment;
 
     /* Allocate frames and packet */
     frame = av_frame_alloc();
@@ -136,8 +141,8 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
                     mexErrMsgIdAndTxt("read_ffmpeg_frame:decode", "Error during decoding");
                 }
 
-                /* Check if this is the target frame by DTS */
-                if (frame->pkt_dts == target_dts) {
+                /* Check if this is the target frame by PTS */
+                if (frame->pts == target_pts) {
                     /* Found the target frame - convert to grayscale and return */
                     int width = codec_ctx->width;
                     int height = codec_ctx->height;
@@ -192,9 +197,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     av_frame_free(&frame);
     av_frame_free(&gray_frame);
     mexErrMsgIdAndTxt("read_ffmpeg_frame:notFound",
-                      "Frame %d not found. target_dts=%lld, read %d packets with DTS range [%lld, %lld]",
+                      "Frame %d not found. target_pts=%lld, read %d packets with DTS range [%lld, %lld]",
                       target_frame + 1,
-                      (long long)target_dts,
+                      (long long)target_pts,
                       packets_read,
                       (long long)first_dts_seen,
                       (long long)last_dts_seen);
