@@ -1,0 +1,16 @@
+# Compiled MEX files
+*.mexa64
+*.mexw64
+*.mexmaci64
+
+# Video files
+*.avi
+*.mp4
+*.ufmf
+*.ufmf.gz
+
+# MATLAB generated
+*.asv
+
+# Claude config
+.claude/
