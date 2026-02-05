@@ -275,6 +275,21 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         if (pkt->stream_index == video_stream_idx) {
             /* Compute frame number from PTS */
             int64_t pts = pkt->pts;
+
+            /* Verify PTS is aligned to pts_increment */
+            if (pts % pts_increment != 0) {
+                av_packet_unref(pkt);
+                av_packet_free(&pkt);
+                mxFree(dts_array);
+                avcodec_free_context(&codec_ctx);
+                avformat_close_input(&fmt_ctx);
+                mxFree(filename);
+                mexErrMsgIdAndTxt("open_ffmpeg_video:misalignedPTS",
+                    "PTS %lld is not a multiple of pts_increment %lld. "
+                    "Frame timing is inconsistent.",
+                    (long long)pts, (long long)pts_increment);
+            }
+
             int frame_num = (int)(pts / pts_increment);
 
             if (frame_num >= 0 && frame_num < num_frames) {
