@@ -113,10 +113,18 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     start_dts = dts_array[start_frame];
     end_dts = dts_array[end_frame];
 
-    /* Determine if source is grayscale based on pixel format */
-    is_grayscale = (codec_ctx->pix_fmt == AV_PIX_FMT_GRAY8 ||
-                    codec_ctx->pix_fmt == AV_PIX_FMT_GRAY16BE ||
-                    codec_ctx->pix_fmt == AV_PIX_FMT_GRAY16LE);
+    /* Check for is_gray override field, otherwise detect from pixel format */
+    mxArray *is_gray_field = mxGetField(prhs[0], 0, "is_gray");
+    if (is_gray_field && mxIsLogical(is_gray_field)) {
+        is_grayscale = mxIsLogicalScalarTrue(is_gray_field);
+    } else if (is_gray_field && mxIsDouble(is_gray_field)) {
+        is_grayscale = (int)mxGetScalar(is_gray_field) != 0;
+    } else {
+        /* Fall back to auto-detection from pixel format */
+        is_grayscale = (codec_ctx->pix_fmt == AV_PIX_FMT_GRAY8 ||
+                        codec_ctx->pix_fmt == AV_PIX_FMT_GRAY16BE ||
+                        codec_ctx->pix_fmt == AV_PIX_FMT_GRAY16LE);
+    }
 
     /* Create output array */
     uint8_t *out_data;

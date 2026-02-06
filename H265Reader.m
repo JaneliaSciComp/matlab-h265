@@ -7,6 +7,9 @@ classdef H265Reader < handle
     %       frame = vid.read(1);
     %       frames = vid.read(1, 100);  % batch read
     %       clear vid;  % automatically closes
+    %
+    %       % For grayscale video (returns 2D frames instead of RGB):
+    %       vid = H265Reader('gray_movie.mp4', true);
 
     properties (SetAccess = private)
         filename
@@ -18,6 +21,7 @@ classdef H265Reader < handle
         time_base_num
         time_base_den
         pts_increment
+        is_gray  % true to return grayscale frames (2D), false for RGB (3D)
     end
 
     properties (Dependent)
@@ -29,11 +33,24 @@ classdef H265Reader < handle
     end
 
     methods
-        function obj = H265Reader(filename)
+        function obj = H265Reader(filename, is_gray)
             % FFMPEGREADER Open a video file for reading
             %   vid = H265Reader(filename)
+            %   vid = H265Reader(filename, is_gray)
+            %
+            %   is_gray - optional boolean (default false): if true, return
+            %             grayscale frames (height x width) instead of RGB
+            %             (height x width x 3)
+
+            if nargin < 2
+                is_gray = false;
+            end
 
             obj.video_info = open_ffmpeg_video(filename);
+
+            % Add is_gray to video_info for MEX functions
+            obj.video_info.is_gray = is_gray;
+            obj.is_gray = is_gray;
 
             % Copy properties for easy access
             obj.filename = obj.video_info.filename;

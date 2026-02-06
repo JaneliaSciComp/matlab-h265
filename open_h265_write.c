@@ -135,14 +135,12 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     codec_ctx->height = height;
     codec_ctx->time_base = (AVRational){frame_rate_den, frame_rate_num};
     codec_ctx->framerate = (AVRational){frame_rate_num, frame_rate_den};
-    codec_ctx->pix_fmt = is_color ? AV_PIX_FMT_YUV444P : AV_PIX_FMT_GRAY8;
+    codec_ctx->pix_fmt = AV_PIX_FMT_YUV420P;  /* Always use YUV420P for compatibility */
     codec_ctx->gop_size = 50;  /* Keyframe interval */
 
-    /* Set x265 params for closed GOP (disable psy-rd for 4:4:4 to preserve chroma) */
-    const char *x265_params = is_color ?
-        "no-open-gop=1:keyint=50:psy-rd=0" :
-        "no-open-gop=1:keyint=50";
-    ret = av_opt_set(codec_ctx->priv_data, "x265-params", x265_params, 0);
+    /* Set x265 params for closed GOP */
+    ret = av_opt_set(codec_ctx->priv_data, "x265-params",
+                     "no-open-gop=1:keyint=50", 0);
     if (ret < 0) {
         avcodec_free_context(&codec_ctx);
         avformat_free_context(fmt_ctx);
@@ -229,26 +227,25 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
             "Could not allocate frame buffer");
     }
 
-    /* Create swscale context for RGB->YUV444P conversion if color mode */
-    if (is_color) {
-        sws_ctx = sws_getContext(width, height, AV_PIX_FMT_RGB24,
-                                 width, height, AV_PIX_FMT_YUV444P,
-                                 SWS_BILINEAR, NULL, NULL, NULL);
-        if (!sws_ctx) {
-            av_frame_free(&frame);
-            avio_closep(&fmt_ctx->pb);
-            avcodec_free_context(&codec_ctx);
-            avformat_free_context(fmt_ctx);
-            mxFree(filename);
-            mexErrMsgIdAndTxt("open_h265_write:swsContext",
-                "Could not create swscale context for RGB conversion");
-        }
+    /* Create swscale context for input->YUV420P conversion */
+    enum AVPixelFormat src_fmt = is_color ? AV_PIX_FMT_RGB24 : AV_PIX_FMT_GRAY8;
+    sws_ctx = sws_getContext(width, height, src_fmt,
+                             width, height, AV_PIX_FMT_YUV420P,
+                             SWS_BILINEAR, NULL, NULL, NULL);
+    if (!sws_ctx) {
+        av_frame_free(&frame);
+        avio_closep(&fmt_ctx->pb);
+        avcodec_free_context(&codec_ctx);
+        avformat_free_context(fmt_ctx);
+        mxFree(filename);
+        mexErrMsgIdAndTxt("open_h265_write:swsContext",
+            "Could not create swscale context");
     }
 
     /* Allocate mutable state struct */
     state = (WriterState *)malloc(sizeof(WriterState));
     if (!state) {
-        if (sws_ctx) sws_freeContext(sws_ctx);
+        sws_freeContext(sws_ctx);
         av_frame_free(&frame);
         avio_closep(&fmt_ctx->pb);
         avcodec_free_context(&codec_ctx);

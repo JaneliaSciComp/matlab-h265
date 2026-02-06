@@ -121,7 +121,6 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 
     if (is_color) {
         /* RGB mode: convert from MATLAB column-major RGB to row-major RGB24, then to YUV420P */
-        /* First, create a temporary RGB24 buffer in row-major order */
         uint8_t *rgb_buffer = (uint8_t *)mxMalloc(height * width * 3);
         if (!rgb_buffer) {
             mexErrMsgIdAndTxt("write_h265_frame:allocRgb",
@@ -148,12 +147,27 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 
         mxFree(rgb_buffer);
     } else {
-        /* Grayscale mode: copy data from MATLAB (column-major) to frame (row-major) */
+        /* Grayscale mode: convert from MATLAB column-major to row-major GRAY8, then to YUV420P */
+        uint8_t *gray_buffer = (uint8_t *)mxMalloc(height * width);
+        if (!gray_buffer) {
+            mexErrMsgIdAndTxt("write_h265_frame:allocGray",
+                "Could not allocate grayscale buffer");
+        }
+
+        /* Convert from MATLAB column-major to row-major */
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
-                frame->data[0][y * frame->linesize[0] + x] = in_data[x * height + y];
+                gray_buffer[y * width + x] = in_data[x * height + y];
             }
         }
+
+        /* Convert GRAY8 to YUV420P using swscale */
+        uint8_t *src_data[1] = {gray_buffer};
+        int src_linesize[1] = {width};
+        sws_scale(sws_ctx, (const uint8_t * const*)src_data, src_linesize,
+                  0, height, frame->data, frame->linesize);
+
+        mxFree(gray_buffer);
     }
 
     /* Set PTS and increment for next frame */
