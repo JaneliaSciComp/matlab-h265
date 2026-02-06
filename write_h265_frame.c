@@ -1,26 +1,29 @@
 /*
  * write_h265_frame.c
- * MEX function to write a grayscale frame to an H.265 video file.
+ * MEX function to write a frame to an H.265 video file.
+ * Supports both grayscale (2D) and RGB (3D) input based on writer mode.
  * Automatically increments PTS for each frame.
  *
  * Usage: write_h265_frame(writer, frame)
  *   writer - struct returned by open_h265_write
- *   frame  - grayscale image as uint8 matrix (height x width)
+ *   frame  - grayscale image as uint8 (height x width) or RGB as uint8 (height x width x 3)
  *
  * Compile with:
- *   mex write_h265_frame.c -lavformat -lavcodec -lavutil
+ *   mex write_h265_frame.c -lavformat -lavcodec -lavutil -lswscale
  */
 
 #include "mex.h"
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
+#include <libswscale/swscale.h>
 #include <libavutil/imgutils.h>
 #include <stdint.h>
 
-/* Must match the struct in open_ffmpeg_write.c */
+/* Must match the struct in open_h265_write.c */
 typedef struct {
     int64_t next_pts;
     int64_t pts_increment;
+    int is_color;  /* 0 for grayscale, 1 for RGB */
 } WriterState;
 
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
@@ -30,9 +33,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     AVFrame *frame = NULL;
     AVPacket *pkt = NULL;
     WriterState *state = NULL;
+    struct SwsContext *sws_ctx = NULL;
     int ret;
     int width, height;
     int stream_idx;
+    int is_color;
 
     /* Check arguments */
     if (nrhs != 2) {
@@ -41,11 +46,16 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
     if (!mxIsStruct(prhs[0])) {
         mexErrMsgIdAndTxt("write_h265_frame:notStruct",
-            "First argument must be writer struct from open_ffmpeg_write");
+            "First argument must be writer struct from open_h265_write");
     }
-    if (!mxIsUint8(prhs[1]) || mxGetNumberOfDimensions(prhs[1]) != 2) {
+    if (!mxIsUint8(prhs[1])) {
         mexErrMsgIdAndTxt("write_h265_frame:notUint8",
-            "Frame must be a 2D uint8 matrix");
+            "Frame must be a uint8 array");
+    }
+    mwSize ndims = mxGetNumberOfDimensions(prhs[1]);
+    if (ndims != 2 && ndims != 3) {
+        mexErrMsgIdAndTxt("write_h265_frame:badDims",
+            "Frame must be 2D (grayscale) or 3D (RGB)");
     }
 
     /* Extract fields from writer struct */
@@ -56,9 +66,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     mxArray *frame_field = mxGetField(prhs[0], 0, "frame_ptr");
     mxArray *state_field = mxGetField(prhs[0], 0, "state_ptr");
     mxArray *stream_idx_field = mxGetField(prhs[0], 0, "stream_idx");
+    mxArray *sws_ctx_field = mxGetField(prhs[0], 0, "sws_ctx_ptr");
+    mxArray *is_color_field = mxGetField(prhs[0], 0, "is_color");
 
     if (!width_field || !height_field || !fmt_ctx_field || !codec_ctx_field ||
-        !frame_field || !state_field || !stream_idx_field) {
+        !frame_field || !state_field || !stream_idx_field || !sws_ctx_field || !is_color_field) {
         mexErrMsgIdAndTxt("write_h265_frame:badStruct",
             "Writer struct is missing required fields");
     }
@@ -70,6 +82,8 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     frame = (AVFrame *)(uintptr_t)(*(uint64_t *)mxGetData(frame_field));
     state = (WriterState *)(uintptr_t)(*(uint64_t *)mxGetData(state_field));
     stream_idx = (int)mxGetScalar(stream_idx_field);
+    sws_ctx = (struct SwsContext *)(uintptr_t)(*(uint64_t *)mxGetData(sws_ctx_field));
+    is_color = (int)mxGetScalar(is_color_field);
 
     /* Validate pointers */
     if (!fmt_ctx || !codec_ctx || !frame || !state) {
@@ -77,12 +91,22 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
             "Invalid writer: null pointers. Was close_ffmpeg_write already called?");
     }
 
-    /* Check frame dimensions */
+    /* Check frame dimensions based on color mode */
     const mwSize *dims = mxGetDimensions(prhs[1]);
-    if (dims[0] != height || dims[1] != width) {
-        mexErrMsgIdAndTxt("write_h265_frame:badDimensions",
-            "Frame dimensions (%d x %d) don't match writer (%d x %d)",
-            (int)dims[0], (int)dims[1], height, width);
+    if (is_color) {
+        /* RGB mode: expect height x width x 3 */
+        if (ndims != 3 || dims[0] != height || dims[1] != width || dims[2] != 3) {
+            mexErrMsgIdAndTxt("write_h265_frame:badDimensions",
+                "RGB frame dimensions (%d x %d x %d) don't match writer (%d x %d x 3)",
+                (int)dims[0], (int)dims[1], (int)(ndims == 3 ? dims[2] : 1), height, width);
+        }
+    } else {
+        /* Grayscale mode: expect height x width */
+        if (ndims != 2 || dims[0] != height || dims[1] != width) {
+            mexErrMsgIdAndTxt("write_h265_frame:badDimensions",
+                "Grayscale frame dimensions (%d x %d) don't match writer (%d x %d)",
+                (int)dims[0], (int)dims[1], height, width);
+        }
     }
 
     /* Get input data */
@@ -95,10 +119,40 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
             "Could not make frame writable");
     }
 
-    /* Copy data from MATLAB (column-major) to frame (row-major) */
-    for (int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
-            frame->data[0][y * frame->linesize[0] + x] = in_data[x * height + y];
+    if (is_color) {
+        /* RGB mode: convert from MATLAB column-major RGB to row-major RGB24, then to YUV420P */
+        /* First, create a temporary RGB24 buffer in row-major order */
+        uint8_t *rgb_buffer = (uint8_t *)mxMalloc(height * width * 3);
+        if (!rgb_buffer) {
+            mexErrMsgIdAndTxt("write_h265_frame:allocRgb",
+                "Could not allocate RGB buffer");
+        }
+
+        /* Convert from MATLAB (height x width x 3, column-major) to RGB24 (row-major, interleaved) */
+        size_t plane_size = (size_t)height * width;
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int matlab_idx = x * height + y;  /* Column-major index for each plane */
+                int rgb_idx = (y * width + x) * 3;  /* Row-major interleaved RGB */
+                rgb_buffer[rgb_idx + 0] = in_data[matlab_idx];                  /* R */
+                rgb_buffer[rgb_idx + 1] = in_data[matlab_idx + plane_size];     /* G */
+                rgb_buffer[rgb_idx + 2] = in_data[matlab_idx + 2 * plane_size]; /* B */
+            }
+        }
+
+        /* Convert RGB24 to YUV420P using swscale */
+        uint8_t *src_data[1] = {rgb_buffer};
+        int src_linesize[1] = {width * 3};
+        sws_scale(sws_ctx, (const uint8_t * const*)src_data, src_linesize,
+                  0, height, frame->data, frame->linesize);
+
+        mxFree(rgb_buffer);
+    } else {
+        /* Grayscale mode: copy data from MATLAB (column-major) to frame (row-major) */
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                frame->data[0][y * frame->linesize[0] + x] = in_data[x * height + y];
+            }
         }
     }
 

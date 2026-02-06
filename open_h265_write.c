@@ -2,11 +2,12 @@
  * open_h265_write.c
  * MEX function to open a video file for writing H.265 with closed GOP.
  *
- * Usage: writer = open_h265_write(filename, width, height, frame_rate)
+ * Usage: writer = open_h265_write(filename, width, height, frame_rate, is_color)
  *   filename   - output file path (must end in .mp4)
  *   width      - frame width
  *   height     - frame height
  *   frame_rate - frame rate as [num, den] or scalar (e.g., [14997, 100] or 30)
+ *   is_color   - optional boolean (default 0): 0 for grayscale, 1 for RGB color
  *
  * Returns a struct with encoder context pointers for write_h265_frame.
  * IMPORTANT: Call close_h265_write(writer) when done to flush and close.
@@ -28,6 +29,7 @@
 typedef struct {
     int64_t next_pts;
     int64_t pts_increment;
+    int is_color;  /* 0 for grayscale, 1 for RGB */
 } WriterState;
 
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
@@ -35,19 +37,21 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     char *filename;
     int width, height;
     int frame_rate_num, frame_rate_den;
+    int is_color = 0;  /* Default to grayscale */
 
     AVFormatContext *fmt_ctx = NULL;
     AVCodecContext *codec_ctx = NULL;
     const AVCodec *codec = NULL;
     AVStream *video_stream = NULL;
     AVFrame *frame = NULL;
+    struct SwsContext *sws_ctx = NULL;
     WriterState *state = NULL;
     int ret;
 
     /* Check arguments */
-    if (nrhs != 4) {
+    if (nrhs < 4 || nrhs > 5) {
         mexErrMsgIdAndTxt("open_h265_write:nrhs",
-            "Four inputs required: filename, width, height, frame_rate");
+            "Four or five inputs required: filename, width, height, frame_rate, [is_color]");
     }
     if (!mxIsChar(prhs[0])) {
         mexErrMsgIdAndTxt("open_h265_write:notString", "Filename must be a string");
@@ -75,6 +79,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         mxFree(filename);
         mexErrMsgIdAndTxt("open_h265_write:badFrameRate",
             "Frame rate must be scalar or [num, den]");
+    }
+
+    /* Parse optional is_color parameter */
+    if (nrhs >= 5) {
+        is_color = (int)mxGetScalar(prhs[4]) != 0;
     }
 
     /* Validate dimensions */
@@ -126,12 +135,14 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     codec_ctx->height = height;
     codec_ctx->time_base = (AVRational){frame_rate_den, frame_rate_num};
     codec_ctx->framerate = (AVRational){frame_rate_num, frame_rate_den};
-    codec_ctx->pix_fmt = AV_PIX_FMT_GRAY8;  /* Native grayscale */
+    codec_ctx->pix_fmt = is_color ? AV_PIX_FMT_YUV444P : AV_PIX_FMT_GRAY8;
     codec_ctx->gop_size = 50;  /* Keyframe interval */
 
-    /* Set x265 params for closed GOP */
-    ret = av_opt_set(codec_ctx->priv_data, "x265-params",
-                     "no-open-gop=1:keyint=50", 0);
+    /* Set x265 params for closed GOP (disable psy-rd for 4:4:4 to preserve chroma) */
+    const char *x265_params = is_color ?
+        "no-open-gop=1:keyint=50:psy-rd=0" :
+        "no-open-gop=1:keyint=50";
+    ret = av_opt_set(codec_ctx->priv_data, "x265-params", x265_params, 0);
     if (ret < 0) {
         avcodec_free_context(&codec_ctx);
         avformat_free_context(fmt_ctx);
@@ -218,9 +229,26 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
             "Could not allocate frame buffer");
     }
 
+    /* Create swscale context for RGB->YUV444P conversion if color mode */
+    if (is_color) {
+        sws_ctx = sws_getContext(width, height, AV_PIX_FMT_RGB24,
+                                 width, height, AV_PIX_FMT_YUV444P,
+                                 SWS_BILINEAR, NULL, NULL, NULL);
+        if (!sws_ctx) {
+            av_frame_free(&frame);
+            avio_closep(&fmt_ctx->pb);
+            avcodec_free_context(&codec_ctx);
+            avformat_free_context(fmt_ctx);
+            mxFree(filename);
+            mexErrMsgIdAndTxt("open_h265_write:swsContext",
+                "Could not create swscale context for RGB conversion");
+        }
+    }
+
     /* Allocate mutable state struct */
     state = (WriterState *)malloc(sizeof(WriterState));
     if (!state) {
+        if (sws_ctx) sws_freeContext(sws_ctx);
         av_frame_free(&frame);
         avio_closep(&fmt_ctx->pb);
         avcodec_free_context(&codec_ctx);
@@ -235,12 +263,13 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     /* Since time_base = frame_rate.den / frame_rate.num, pts_increment = 1 */
     state->next_pts = 0;
     state->pts_increment = 1;  /* With our time_base setup, each frame is 1 time unit */
+    state->is_color = is_color;
 
     /* Create output struct */
     const char *field_names[] = {"filename", "width", "height",
                                   "fmt_ctx_ptr", "codec_ctx_ptr", "frame_ptr",
-                                  "state_ptr", "stream_idx"};
-    plhs[0] = mxCreateStructMatrix(1, 1, 8, field_names);
+                                  "state_ptr", "stream_idx", "sws_ctx_ptr", "is_color"};
+    plhs[0] = mxCreateStructMatrix(1, 1, 10, field_names);
 
     mxArray *mx_uint64;
 
@@ -269,6 +298,14 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 
     /* Set stream_idx (double for MATLAB convenience) */
     mxSetField(plhs[0], 0, "stream_idx", mxCreateDoubleScalar(0));
+
+    /* Store swscale context pointer (may be NULL for grayscale) */
+    mx_uint64 = mxCreateNumericMatrix(1, 1, mxUINT64_CLASS, mxREAL);
+    *(uint64_t *)mxGetData(mx_uint64) = (uint64_t)(uintptr_t)sws_ctx;
+    mxSetField(plhs[0], 0, "sws_ctx_ptr", mx_uint64);
+
+    /* Store is_color flag */
+    mxSetField(plhs[0], 0, "is_color", mxCreateDoubleScalar((double)is_color));
 
     mxFree(filename);
 }

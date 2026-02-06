@@ -9,12 +9,13 @@
  * trailer, and frees all resources.
  *
  * Compile with:
- *   mex close_h265_write.c -lavformat -lavcodec -lavutil
+ *   mex close_h265_write.c -lavformat -lavcodec -lavutil -lswscale
  */
 
 #include "mex.h"
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
+#include <libswscale/swscale.h>
 #include <stdint.h>
 #include <stdlib.h>
 
@@ -25,6 +26,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     AVFrame *frame = NULL;
     AVPacket *pkt = NULL;
     void *state = NULL;
+    struct SwsContext *sws_ctx = NULL;
     int ret;
     int stream_idx;
 
@@ -44,6 +46,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     mxArray *frame_field = mxGetField(prhs[0], 0, "frame_ptr");
     mxArray *state_field = mxGetField(prhs[0], 0, "state_ptr");
     mxArray *stream_idx_field = mxGetField(prhs[0], 0, "stream_idx");
+    mxArray *sws_ctx_field = mxGetField(prhs[0], 0, "sws_ctx_ptr");
 
     if (!fmt_ctx_field || !codec_ctx_field || !frame_field || !state_field || !stream_idx_field) {
         mexErrMsgIdAndTxt("close_h265_write:badStruct",
@@ -55,6 +58,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     frame = (AVFrame *)(uintptr_t)(*(uint64_t *)mxGetData(frame_field));
     state = (void *)(uintptr_t)(*(uint64_t *)mxGetData(state_field));
     stream_idx = (int)mxGetScalar(stream_idx_field);
+    if (sws_ctx_field) {
+        sws_ctx = (struct SwsContext *)(uintptr_t)(*(uint64_t *)mxGetData(sws_ctx_field));
+    }
 
     /* Check if already closed */
     if (!fmt_ctx || !codec_ctx) {
@@ -113,6 +119,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
 
     /* Free resources */
+    if (sws_ctx) {
+        sws_freeContext(sws_ctx);
+    }
     if (state) {
         free(state);
     }

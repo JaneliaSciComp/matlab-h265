@@ -19,8 +19,8 @@ targets = {
     {'close_ffmpeg_video.c', '-lavformat', '-lavcodec', '-lavutil'}
     % H.265 writing functions
     {'open_h265_write.c', '-lavformat', '-lavcodec', '-lavutil', '-lswscale'}
-    {'write_h265_frame.c', '-lavformat', '-lavcodec', '-lavutil'}
-    {'close_h265_write.c', '-lavformat', '-lavcodec', '-lavutil'}
+    {'write_h265_frame.c', '-lavformat', '-lavcodec', '-lavutil', '-lswscale'}
+    {'close_h265_write.c', '-lavformat', '-lavcodec', '-lavutil', '-lswscale'}
 };
 
 mex_ext = mexext;

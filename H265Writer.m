@@ -2,17 +2,22 @@ classdef H265Writer < handle
     % H265WRITER Wrapper for H.265 video writing MEX functions
     %   Ensures proper resource cleanup when object is destroyed.
     %
-    %   Example:
+    %   Example (grayscale):
     %       vid = H265Writer('output.mp4', 640, 480, 30);
-    %       vid.write(frame1);
-    %       vid.write(frame2);
-    %       clear vid;  % automatically closes and flushes
+    %       vid.write(gray_frame);  % height x width uint8
+    %       clear vid;
+    %
+    %   Example (RGB color):
+    %       vid = H265Writer('output.mp4', 640, 480, 30, true);
+    %       vid.write(rgb_frame);  % height x width x 3 uint8
+    %       clear vid;
 
     properties (SetAccess = private)
         filename
         width
         height
         frame_rate
+        is_color
         frames_written = 0
     end
 
@@ -21,17 +26,24 @@ classdef H265Writer < handle
     end
 
     methods
-        function obj = H265Writer(filename, width, height, frame_rate)
+        function obj = H265Writer(filename, width, height, frame_rate, is_color)
             % H265WRITER Open a video file for writing
             %   vid = H265Writer(filename, width, height, frame_rate)
+            %   vid = H265Writer(filename, width, height, frame_rate, is_color)
             %
             %   frame_rate can be a scalar (e.g., 30) or [num, den] (e.g., [30000, 1001])
+            %   is_color: false (default) for grayscale, true for RGB color
 
-            obj.writer_info = open_h265_write(filename, width, height, frame_rate);
+            if nargin < 5
+                is_color = false;
+            end
+
+            obj.writer_info = open_h265_write(filename, width, height, frame_rate, is_color);
 
             obj.filename = filename;
             obj.width = width;
             obj.height = height;
+            obj.is_color = is_color;
             if isscalar(frame_rate)
                 obj.frame_rate = frame_rate;
             else
@@ -43,16 +55,32 @@ classdef H265Writer < handle
             % WRITE Write a frame to the video
             %   vid.write(frame)
             %
-            %   frame must be a uint8 matrix of size height x width
+            %   For grayscale: frame must be uint8 matrix of size height x width
+            %   For RGB color: frame must be uint8 array of size height x width x 3
 
             if ~isa(frame, 'uint8')
                 error('H265Writer:badType', 'Frame must be uint8');
             end
 
-            [h, w] = size(frame);
-            if h ~= obj.height || w ~= obj.width
-                error('H265Writer:badSize', 'Frame size %dx%d does not match video %dx%d', ...
-                    h, w, obj.height, obj.width);
+            if obj.is_color
+                % RGB mode: expect height x width x 3
+                if ndims(frame) ~= 3 || size(frame, 3) ~= 3
+                    error('H265Writer:badSize', 'RGB frame must have 3 channels');
+                end
+                if size(frame, 1) ~= obj.height || size(frame, 2) ~= obj.width
+                    error('H265Writer:badSize', 'Frame size %dx%d does not match video %dx%d', ...
+                        size(frame, 1), size(frame, 2), obj.height, obj.width);
+                end
+            else
+                % Grayscale mode: expect height x width
+                if ndims(frame) ~= 2
+                    error('H265Writer:badSize', 'Grayscale frame must be 2D');
+                end
+                [h, w] = size(frame);
+                if h ~= obj.height || w ~= obj.width
+                    error('H265Writer:badSize', 'Frame size %dx%d does not match video %dx%d', ...
+                        h, w, obj.height, obj.width);
+                end
             end
 
             write_h265_frame(obj.writer_info, frame);

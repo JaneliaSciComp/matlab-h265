@@ -6,7 +6,8 @@
  * Usage: frame = read_ffmpeg_frame(video_info, frame_index)
  *   video_info  - struct returned by open_ffmpeg_video
  *   frame_index - 1-based frame index
- *   frame       - grayscale image as uint8 matrix (height x width)
+ *   frame       - grayscale (height x width) or RGB (height x width x 3) uint8
+ *                 Output format depends on source video pixel format.
  *
  * Compile with:
  *   mex read_ffmpeg_frame.c -lavformat -lavcodec -lavutil -lswscale
@@ -29,9 +30,10 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     AVFormatContext *fmt_ctx = NULL;
     AVCodecContext *codec_ctx = NULL;
     AVFrame *frame = NULL;
-    AVFrame *gray_frame = NULL;
+    AVFrame *out_frame = NULL;
     AVPacket *pkt = NULL;
     struct SwsContext *sws_ctx = NULL;
+    int is_grayscale;
 
     int video_stream_idx = -1;
     int ret;
@@ -89,14 +91,19 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     target_dts = dts_array[target_frame];
     target_pts = (int64_t)target_frame * pts_increment;
 
+    /* Determine if source is grayscale based on pixel format */
+    is_grayscale = (codec_ctx->pix_fmt == AV_PIX_FMT_GRAY8 ||
+                    codec_ctx->pix_fmt == AV_PIX_FMT_GRAY16BE ||
+                    codec_ctx->pix_fmt == AV_PIX_FMT_GRAY16LE);
+
     /* Allocate frames and packet */
     frame = av_frame_alloc();
-    gray_frame = av_frame_alloc();
+    out_frame = av_frame_alloc();
     pkt = av_packet_alloc();
 
-    if (!frame || !gray_frame || !pkt) {
+    if (!frame || !out_frame || !pkt) {
         av_frame_free(&frame);
-        av_frame_free(&gray_frame);
+        av_frame_free(&out_frame);
         av_packet_free(&pkt);
         mexErrMsgIdAndTxt("read_ffmpeg_frame:allocFrame", "Could not allocate frame/packet");
     }
@@ -137,46 +144,66 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
                 } else if (ret < 0) {
                     av_packet_free(&pkt);
                     av_frame_free(&frame);
-                    av_frame_free(&gray_frame);
+                    av_frame_free(&out_frame);
                     mexErrMsgIdAndTxt("read_ffmpeg_frame:decode", "Error during decoding");
                 }
 
                 /* Check if this is the target frame by PTS */
                 if (frame->pts == target_pts) {
-                    /* Found the target frame - convert to grayscale and return */
+                    /* Found the target frame - convert and return */
                     int width = codec_ctx->width;
                     int height = codec_ctx->height;
+                    enum AVPixelFormat out_pix_fmt = is_grayscale ? AV_PIX_FMT_GRAY8 : AV_PIX_FMT_RGB24;
 
-                    /* Setup grayscale frame */
-                    gray_frame->format = AV_PIX_FMT_GRAY8;
-                    gray_frame->width = width;
-                    gray_frame->height = height;
-                    av_frame_get_buffer(gray_frame, 0);
+                    /* Setup output frame */
+                    out_frame->format = out_pix_fmt;
+                    out_frame->width = width;
+                    out_frame->height = height;
+                    av_frame_get_buffer(out_frame, 0);
 
                     /* Create scaler context */
                     sws_ctx = sws_getContext(width, height, codec_ctx->pix_fmt,
-                                             width, height, AV_PIX_FMT_GRAY8,
+                                             width, height, out_pix_fmt,
                                              SWS_BILINEAR, NULL, NULL, NULL);
 
                     if (!sws_ctx) {
                         av_packet_free(&pkt);
                         av_frame_free(&frame);
-                        av_frame_free(&gray_frame);
+                        av_frame_free(&out_frame);
                         mexErrMsgIdAndTxt("read_ffmpeg_frame:sws", "Could not create scaler context");
                     }
 
-                    /* Convert to grayscale */
+                    /* Convert to output format */
                     sws_scale(sws_ctx, (const uint8_t * const*)frame->data, frame->linesize,
-                              0, height, gray_frame->data, gray_frame->linesize);
+                              0, height, out_frame->data, out_frame->linesize);
 
-                    /* Create MATLAB output array (height x width) */
-                    plhs[0] = mxCreateNumericMatrix(height, width, mxUINT8_CLASS, mxREAL);
-                    uint8_t *out_data = (uint8_t *)mxGetData(plhs[0]);
+                    if (is_grayscale) {
+                        /* Create MATLAB output array (height x width) */
+                        plhs[0] = mxCreateNumericMatrix(height, width, mxUINT8_CLASS, mxREAL);
+                        uint8_t *out_data = (uint8_t *)mxGetData(plhs[0]);
 
-                    /* Copy data (MATLAB is column-major, so transpose) */
-                    for (int y = 0; y < height; y++) {
-                        for (int x = 0; x < width; x++) {
-                            out_data[x * height + y] = gray_frame->data[0][y * gray_frame->linesize[0] + x];
+                        /* Copy data (MATLAB is column-major, so transpose) */
+                        for (int y = 0; y < height; y++) {
+                            for (int x = 0; x < width; x++) {
+                                out_data[x * height + y] = out_frame->data[0][y * out_frame->linesize[0] + x];
+                            }
+                        }
+                    } else {
+                        /* Create MATLAB output array (height x width x 3) */
+                        mwSize dims[3] = {height, width, 3};
+                        plhs[0] = mxCreateNumericArray(3, dims, mxUINT8_CLASS, mxREAL);
+                        uint8_t *out_data = (uint8_t *)mxGetData(plhs[0]);
+                        size_t plane_size = (size_t)height * width;
+
+                        /* Copy RGB data (convert from row-major interleaved to column-major planar) */
+                        for (int y = 0; y < height; y++) {
+                            for (int x = 0; x < width; x++) {
+                                int rgb_idx = y * out_frame->linesize[0] + x * 3;
+                                int matlab_idx = x * height + y;
+                                out_data[matlab_idx] = out_frame->data[0][rgb_idx];                  /* R */
+                                out_data[matlab_idx + plane_size] = out_frame->data[0][rgb_idx + 1]; /* G */
+                                out_data[matlab_idx + 2 * plane_size] = out_frame->data[0][rgb_idx + 2]; /* B */
+                            }
                         }
                     }
 
@@ -184,7 +211,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
                     sws_freeContext(sws_ctx);
                     av_packet_free(&pkt);
                     av_frame_free(&frame);
-                    av_frame_free(&gray_frame);
+                    av_frame_free(&out_frame);
                     return;
                 }
             }
@@ -204,40 +231,60 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 
         /* Check if this is the target frame by PTS */
         if (frame->pts == target_pts) {
-            /* Found the target frame - convert to grayscale and return */
+            /* Found the target frame - convert and return */
             int width = codec_ctx->width;
             int height = codec_ctx->height;
+            enum AVPixelFormat out_pix_fmt = is_grayscale ? AV_PIX_FMT_GRAY8 : AV_PIX_FMT_RGB24;
 
-            /* Setup grayscale frame */
-            gray_frame->format = AV_PIX_FMT_GRAY8;
-            gray_frame->width = width;
-            gray_frame->height = height;
-            av_frame_get_buffer(gray_frame, 0);
+            /* Setup output frame */
+            out_frame->format = out_pix_fmt;
+            out_frame->width = width;
+            out_frame->height = height;
+            av_frame_get_buffer(out_frame, 0);
 
             /* Create scaler context */
             sws_ctx = sws_getContext(width, height, codec_ctx->pix_fmt,
-                                     width, height, AV_PIX_FMT_GRAY8,
+                                     width, height, out_pix_fmt,
                                      SWS_BILINEAR, NULL, NULL, NULL);
 
             if (!sws_ctx) {
                 av_packet_free(&pkt);
                 av_frame_free(&frame);
-                av_frame_free(&gray_frame);
+                av_frame_free(&out_frame);
                 mexErrMsgIdAndTxt("read_ffmpeg_frame:sws", "Could not create scaler context");
             }
 
-            /* Convert to grayscale */
+            /* Convert to output format */
             sws_scale(sws_ctx, (const uint8_t * const*)frame->data, frame->linesize,
-                      0, height, gray_frame->data, gray_frame->linesize);
+                      0, height, out_frame->data, out_frame->linesize);
 
-            /* Create MATLAB output array (height x width) */
-            plhs[0] = mxCreateNumericMatrix(height, width, mxUINT8_CLASS, mxREAL);
-            uint8_t *out_data = (uint8_t *)mxGetData(plhs[0]);
+            if (is_grayscale) {
+                /* Create MATLAB output array (height x width) */
+                plhs[0] = mxCreateNumericMatrix(height, width, mxUINT8_CLASS, mxREAL);
+                uint8_t *out_data = (uint8_t *)mxGetData(plhs[0]);
 
-            /* Copy data (MATLAB is column-major, so transpose) */
-            for (int y = 0; y < height; y++) {
-                for (int x = 0; x < width; x++) {
-                    out_data[x * height + y] = gray_frame->data[0][y * gray_frame->linesize[0] + x];
+                /* Copy data (MATLAB is column-major, so transpose) */
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++) {
+                        out_data[x * height + y] = out_frame->data[0][y * out_frame->linesize[0] + x];
+                    }
+                }
+            } else {
+                /* Create MATLAB output array (height x width x 3) */
+                mwSize dims[3] = {height, width, 3};
+                plhs[0] = mxCreateNumericArray(3, dims, mxUINT8_CLASS, mxREAL);
+                uint8_t *out_data = (uint8_t *)mxGetData(plhs[0]);
+                size_t plane_size = (size_t)height * width;
+
+                /* Copy RGB data (convert from row-major interleaved to column-major planar) */
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++) {
+                        int rgb_idx = y * out_frame->linesize[0] + x * 3;
+                        int matlab_idx = x * height + y;
+                        out_data[matlab_idx] = out_frame->data[0][rgb_idx];                  /* R */
+                        out_data[matlab_idx + plane_size] = out_frame->data[0][rgb_idx + 1]; /* G */
+                        out_data[matlab_idx + 2 * plane_size] = out_frame->data[0][rgb_idx + 2]; /* B */
+                    }
                 }
             }
 
@@ -245,7 +292,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
             sws_freeContext(sws_ctx);
             av_packet_free(&pkt);
             av_frame_free(&frame);
-            av_frame_free(&gray_frame);
+            av_frame_free(&out_frame);
             return;
         }
     }
@@ -253,7 +300,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     /* Frame not found */
     av_packet_free(&pkt);
     av_frame_free(&frame);
-    av_frame_free(&gray_frame);
+    av_frame_free(&out_frame);
     mexErrMsgIdAndTxt("read_ffmpeg_frame:notFound",
                       "Frame %d not found. target_pts=%lld, read %d packets with DTS range [%lld, %lld]",
                       target_frame + 1,

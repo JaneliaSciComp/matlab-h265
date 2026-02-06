@@ -1,6 +1,6 @@
-function test_write_and_read_gray()
-% TEST_WRITE_AND_READ_GRAY Test grayscale video writing and reading
-%   Generates random grayscale frames, writes to H.265, reads back, and
+function test_write_and_read_rgb()
+% TEST_WRITE_AND_READ_RGB Test RGB video writing and reading
+%   Generates random RGB frames, writes to H.265, reads back, and
 %   verifies using SSIM (Structural Similarity Index). Throws error on failure.
 
 % Create temp directory and ensure cleanup on exit (normal or error)
@@ -16,13 +16,13 @@ frame_rate = 30;  % Hz
 min_ssim = 0.8;  % Threshold for filtered data with lossy compression
 output_file = fullfile(temp_dir, 'test_output.mp4');
 
-% Generate frames with low-pass filtered random values
+% Generate frames with low-pass filtered random RGB values
 % This creates spatially correlated data like real images
-raw_frames = randi([0 255], height, width, frame_count);
+raw_frames = randi([0 255], height, width, 3, frame_count);
 original_frames = uint8(imgaussfilt(double(raw_frames), 5));
 
-% Write frames to file
-writer = H265Writer(output_file, width, height, frame_rate);
+% Write frames to file (is_color=true for RGB)
+writer = H265Writer(output_file, width, height, frame_rate, true);
 
 % Check writer properties
 assert(strcmp(writer.filename, output_file), 'Writer filename mismatch');
@@ -32,7 +32,7 @@ assert(writer.frame_rate == frame_rate, 'Writer frame_rate mismatch');
 assert(writer.frames_written == 0, 'Writer frames_written should start at 0');
 
 for i = 1:frame_count
-    writer.write(original_frames(:,:,i));
+    writer.write(original_frames(:,:,:,i));
 end
 
 % Check writer state after writing
@@ -59,7 +59,8 @@ readback_frames = reader.read(1, frame_count);
 assert(isa(readback_frames, 'uint8'), 'Frames should be uint8');
 assert(size(readback_frames, 1) == height, 'Batch frame height mismatch');
 assert(size(readback_frames, 2) == width, 'Batch frame width mismatch');
-assert(size(readback_frames, 3) == frame_count, 'Batch frame count mismatch');
+assert(size(readback_frames, 3) == 3, 'Batch frame should have 3 channels');
+assert(size(readback_frames, 4) == frame_count, 'Batch frame count mismatch');
 
 % Test single-frame reads of first, middle, and last frames
 first_frame = reader.read(1);
@@ -68,23 +69,27 @@ middle_frame = reader.read(middle_idx);
 last_frame = reader.read(frame_count);
 
 assert(isa(first_frame, 'uint8'), 'Single frame should be uint8');
-assert(isequal(first_frame, readback_frames(:,:,1)), 'Single read of first frame does not match batch read');
-assert(isequal(middle_frame, readback_frames(:,:,middle_idx)), 'Single read of middle frame does not match batch read');
-assert(isequal(last_frame, readback_frames(:,:,frame_count)), 'Single read of last frame does not match batch read');
+assert(size(first_frame, 3) == 3, 'Single frame should have 3 channels');
+assert(isequal(first_frame, readback_frames(:,:,:,1)), 'Single read of first frame does not match batch read');
+assert(isequal(middle_frame, readback_frames(:,:,:,middle_idx)), 'Single read of middle frame does not match batch read');
+assert(isequal(last_frame, readback_frames(:,:,:,frame_count)), 'Single read of last frame does not match batch read');
 
 clear reader;
 
-% Compute SSIM for each frame
+% Compute SSIM for each frame (average across channels)
 ssim_values = zeros(frame_count, 1);
 for i = 1:frame_count
-    ssim_values(i) = ssim(readback_frames(:,:,i), original_frames(:,:,i));
+    ssim_r = ssim(readback_frames(:,:,1,i), original_frames(:,:,1,i));
+    ssim_g = ssim(readback_frames(:,:,2,i), original_frames(:,:,2,i));
+    ssim_b = ssim(readback_frames(:,:,3,i), original_frames(:,:,3,i));
+    ssim_values(i) = (ssim_r + ssim_g + ssim_b) / 3;
 end
 
 min_ssim_actual = min(ssim_values);
 
 % Check SSIM threshold
 if min_ssim_actual < min_ssim
-    error('test_write_and_read_gray:ssim', 'SSIM too low: minimum %.4f < threshold %.4f', min_ssim_actual, min_ssim);
+    error('test_write_and_read_rgb:ssim', 'SSIM too low: minimum %.4f < threshold %.4f', min_ssim_actual, min_ssim);
 end
 
 % Test second file with different parameters
@@ -94,9 +99,9 @@ height2 = 128;
 frame_rate2 = 24;
 frame_count2 = 10;
 
-writer2 = H265Writer(output_file2, width2, height2, frame_rate2);
+writer2 = H265Writer(output_file2, width2, height2, frame_rate2, true);
 for i = 1:frame_count2
-    writer2.write(uint8(randi([0 255], height2, width2)));
+    writer2.write(uint8(randi([0 255], height2, width2, 3)));
 end
 clear writer2;
 
