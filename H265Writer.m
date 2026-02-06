@@ -51,40 +51,70 @@ classdef H265Writer < handle
             end
         end
 
-        function write(obj, frame)
-            % WRITE Write a frame to the video
+        function write(obj, frames)
+            % WRITE Write one or more frames to the video
             %   vid.write(frame)
+            %   vid.write(frames)
             %
-            %   For grayscale: frame must be uint8 matrix of size height x width
-            %   For RGB color: frame must be uint8 array of size height x width x 3
+            %   For grayscale: frames must be uint8 array of size height x width x num_frames
+            %                  (single frame can be height x width)
+            %   For RGB color: frames must be uint8 array of size height x width x 3 x num_frames
+            %                  (single frame can be height x width x 3)
 
-            if ~isa(frame, 'uint8')
-                error('H265Writer:badType', 'Frame must be uint8');
+            if ~isa(frames, 'uint8')
+                error('H265Writer:badType', 'Frames must be uint8');
             end
+
+            nd = ndims(frames);
 
             if obj.is_color
-                % RGB mode: expect height x width x 3
-                if ndims(frame) ~= 3 || size(frame, 3) ~= 3
-                    error('H265Writer:badSize', 'RGB frame must have 3 channels');
-                end
-                if size(frame, 1) ~= obj.height || size(frame, 2) ~= obj.width
-                    error('H265Writer:badSize', 'Frame size %dx%d does not match video %dx%d', ...
-                        size(frame, 1), size(frame, 2), obj.height, obj.width);
+                % RGB mode: expect height x width x 3 x num_frames (or height x width x 3 for single)
+                if nd == 3
+                    % Single frame: height x width x 3
+                    if size(frames, 3) ~= 3
+                        error('H265Writer:badSize', 'RGB frame must have 3 channels');
+                    end
+                    if size(frames, 1) ~= obj.height || size(frames, 2) ~= obj.width
+                        error('H265Writer:badSize', 'Frame size %dx%d does not match video %dx%d', ...
+                            size(frames, 1), size(frames, 2), obj.height, obj.width);
+                    end
+                    num_frames = 1;
+                elseif nd == 4
+                    % Multiple frames: height x width x 3 x num_frames
+                    if size(frames, 3) ~= 3
+                        error('H265Writer:badSize', 'RGB frames must have 3 channels');
+                    end
+                    if size(frames, 1) ~= obj.height || size(frames, 2) ~= obj.width
+                        error('H265Writer:badSize', 'Frame size %dx%d does not match video %dx%d', ...
+                            size(frames, 1), size(frames, 2), obj.height, obj.width);
+                    end
+                    num_frames = size(frames, 4);
+                else
+                    error('H265Writer:badSize', 'RGB frames must be 3D (single) or 4D (batch)');
                 end
             else
-                % Grayscale mode: expect height x width
-                if ndims(frame) ~= 2
-                    error('H265Writer:badSize', 'Grayscale frame must be 2D');
-                end
-                [h, w] = size(frame);
-                if h ~= obj.height || w ~= obj.width
-                    error('H265Writer:badSize', 'Frame size %dx%d does not match video %dx%d', ...
-                        h, w, obj.height, obj.width);
+                % Grayscale mode: expect height x width x num_frames (or height x width for single)
+                if nd == 2
+                    % Single frame: height x width
+                    if size(frames, 1) ~= obj.height || size(frames, 2) ~= obj.width
+                        error('H265Writer:badSize', 'Frame size %dx%d does not match video %dx%d', ...
+                            size(frames, 1), size(frames, 2), obj.height, obj.width);
+                    end
+                    num_frames = 1;
+                elseif nd == 3
+                    % Multiple frames: height x width x num_frames
+                    if size(frames, 1) ~= obj.height || size(frames, 2) ~= obj.width
+                        error('H265Writer:badSize', 'Frame size %dx%d does not match video %dx%d', ...
+                            size(frames, 1), size(frames, 2), obj.height, obj.width);
+                    end
+                    num_frames = size(frames, 3);
+                else
+                    error('H265Writer:badSize', 'Grayscale frames must be 2D (single) or 3D (batch)');
                 end
             end
 
-            write_h265_frame(obj.writer_info, frame);
-            obj.frames_written = obj.frames_written + 1;
+            write_h265_frames(obj.writer_info, frames);
+            obj.frames_written = obj.frames_written + num_frames;
         end
 
         function delete(obj)
