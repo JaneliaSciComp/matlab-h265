@@ -14,8 +14,9 @@
  *   fmt_ctx_ptr    - pointer to AVFormatContext (for read_ffmpeg_frame)
  *   codec_ctx_ptr  - pointer to AVCodecContext (for read_ffmpeg_frame)
  *   video_stream_idx - video stream index
+ *   cache_ptr  - pointer to GOP frame cache (initially empty)
  *
- * IMPORTANT: Call close_ffmpeg_video(video_info) when done to free resources.
+ * IMPORTANT: Call close_h265_video(video_info) when done to free resources.
  *
  * Compile with:
  *   mex open_h265_video.c -lavformat -lavcodec -lavutil
@@ -24,8 +25,11 @@
 #include "mex.h"
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
+#include <libavutil/log.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
+#include "h265_frame_cache.h"
 
 /* HEVC NAL unit types that indicate open GOP */
 #define HEVC_NAL_BLA_W_LP    16
@@ -77,9 +81,44 @@ static int check_hevc_packet_for_open_gop(const uint8_t *data, int size, int len
     return -1;  /* No open GOP indicators found */
 }
 
+/*
+ * Allocate an empty frame cache. Frame data block will be allocated on first read.
+ */
+static H265FrameCache *alloc_frame_cache(void)
+{
+    H265FrameCache *cache = (H265FrameCache *)malloc(sizeof(H265FrameCache));
+    if (!cache) return NULL;
+
+    /* Allocate handles */
+    cache->frame_data = (uint8_t **)malloc(sizeof(uint8_t *));
+    cache->frame_indices = (int **)malloc(sizeof(int *));
+
+    if (!cache->frame_data || !cache->frame_indices) {
+        if (cache->frame_data) free(cache->frame_data);
+        if (cache->frame_indices) free(cache->frame_indices);
+        free(cache);
+        return NULL;
+    }
+
+    *cache->frame_data = NULL;     /* Allocated on first read */
+    *cache->frame_indices = NULL;  /* Allocated on first read */
+    cache->num_frames = 0;
+    cache->capacity = 0;
+    cache->width = 0;
+    cache->height = 0;
+    cache->is_grayscale = 0;
+    cache->frame_size = 0;
+
+    return cache;
+}
+
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {
     char *filename;
+
+    /* Suppress FFmpeg info messages (only show warnings and errors) */
+    av_log_set_level(AV_LOG_WARNING);
+
     AVFormatContext *fmt_ctx = NULL;
     AVCodecContext *codec_ctx = NULL;
     const AVCodec *codec = NULL;
@@ -349,12 +388,22 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         is_grayscale = (strcmp(tag->value, "1") == 0) ? 1 : 0;
     }
 
-    /* Create output struct - keep fmt_ctx and codec_ctx open */
+    /* Allocate empty GOP frame cache (will be populated on first read) */
+    H265FrameCache *frame_cache = alloc_frame_cache();
+    if (!frame_cache) {
+        mxFree(dts_array);
+        avcodec_free_context(&codec_ctx);
+        avformat_close_input(&fmt_ctx);
+        mxFree(filename);
+        mexErrMsgIdAndTxt("open_h265_video:allocCache", "Could not allocate frame cache");
+    }
+
+    /* Create output struct - keep fmt_ctx, codec_ctx, and cache open */
     const char *field_names[] = {"filename", "num_frames", "width", "height", "dts",
                                   "fmt_ctx_ptr", "codec_ctx_ptr", "video_stream_idx", "pts_increment",
                                   "time_base_num", "time_base_den", "frame_rate_num", "frame_rate_den",
-                                  "is_grayscale"};
-    plhs[0] = mxCreateStructMatrix(1, 1, 14, field_names);
+                                  "is_grayscale", "cache_ptr"};
+    plhs[0] = mxCreateStructMatrix(1, 1, 15, field_names);
 
     /* Helper variables for typed arrays */
     mxArray *mx_int32;
@@ -415,7 +464,12 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     /* Set is_grayscale (-1 if not in metadata, 0 or 1 otherwise) */
     mxSetField(plhs[0], 0, "is_grayscale", mxCreateDoubleScalar((double)is_grayscale));
 
-    /* Free temporary arrays (but NOT fmt_ctx or codec_ctx - they stay open) */
+    /* Store cache pointer as uint64 */
+    mx_uint64 = mxCreateNumericMatrix(1, 1, mxUINT64_CLASS, mxREAL);
+    *(uint64_t *)mxGetData(mx_uint64) = (uint64_t)(uintptr_t)frame_cache;
+    mxSetField(plhs[0], 0, "cache_ptr", mx_uint64);
+
+    /* Free temporary arrays (but NOT fmt_ctx, codec_ctx, or cache - they stay open) */
     mxFree(dts_array);
     mxFree(filename);
 }

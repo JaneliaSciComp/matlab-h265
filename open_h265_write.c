@@ -24,6 +24,7 @@
 #include <libswscale/swscale.h>
 #include <libavutil/opt.h>
 #include <libavutil/imgutils.h>
+#include <libavutil/log.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -42,6 +43,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     int is_color;
     int gop_size;
     int crf;
+
+    /* Suppress FFmpeg info messages (only show warnings and errors) */
+    av_log_set_level(AV_LOG_WARNING);
 
     AVFormatContext *fmt_ctx = NULL;
     AVCodecContext *codec_ctx = NULL;
@@ -154,9 +158,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     codec_ctx->pix_fmt = AV_PIX_FMT_YUV420P;  /* Always use YUV420P for compatibility */
     codec_ctx->gop_size = gop_size;
 
-    /* Set x265 params for closed GOP and quality */
-    char x265_params[128];
-    snprintf(x265_params, sizeof(x265_params), "no-open-gop=1:keyint=%d:crf=%d", gop_size, crf);
+    /* Set x265 params for closed GOP, quality, and suppress info messages */
+    char x265_params[256];
+    snprintf(x265_params, sizeof(x265_params), "log-level=warning:no-open-gop=1:keyint=%d:crf=%d", gop_size, crf);
     ret = av_opt_set(codec_ctx->priv_data, "x265-params", x265_params, 0);
     if (ret < 0) {
         avcodec_free_context(&codec_ctx);

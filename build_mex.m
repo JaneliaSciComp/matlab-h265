@@ -22,17 +22,18 @@ else
   error('build_mex:badArg', 'Unknown argument: %s', varargin{1});
 end
 
-% Define all MEX targets: {source_file, mex_args...}
+% Define all MEX targets: {source_file, {header_deps...}, mex_args...}
+% Header dependencies are checked to trigger rebuilds when headers change.
 targets = {
   % Video reading functions
-  {'open_h265_video.c', '-lavformat', '-lavcodec', '-lavutil'}
-  {'read_h265_frame.c', '-lavformat', '-lavcodec', '-lavutil', '-lswscale'}
-  {'read_h265_frames.c', '-lavformat', '-lavcodec', '-lavutil', '-lswscale'}
-  {'close_h265_video.c', '-lavformat', '-lavcodec', '-lavutil'}
+  {'open_h265_video.c', {'h265_frame_cache.h'}, '-lavformat', '-lavcodec', '-lavutil'}
+  {'read_h265_frame.c', {'h265_frame_cache.h', 'h265_decode_common.h'}, '-lavformat', '-lavcodec', '-lavutil', '-lswscale'}
+  {'read_h265_frames.c', {'h265_decode_common.h'}, '-lavformat', '-lavcodec', '-lavutil', '-lswscale'}
+  {'close_h265_video.c', {'h265_frame_cache.h'}, '-lavformat', '-lavcodec', '-lavutil'}
   % H.265 writing functions
-  {'open_h265_write.c', '-lavformat', '-lavcodec', '-lavutil', '-lswscale'}
-  {'write_h265_frames.c', '-lavformat', '-lavcodec', '-lavutil', '-lswscale'}
-  {'close_h265_write.c', '-lavformat', '-lavcodec', '-lavutil', '-lswscale'}
+  {'open_h265_write.c', {}, '-lavformat', '-lavcodec', '-lavutil', '-lswscale'}
+  {'write_h265_frames.c', {}, '-lavformat', '-lavcodec', '-lavutil', '-lswscale'}
+  {'close_h265_write.c', {}, '-lavformat', '-lavcodec', '-lavutil', '-lswscale'}
 };
 
 mex_ext = mexext;
@@ -65,7 +66,8 @@ if do_build
   built_count = 0;
   for i = 1:numel(targets)
     src_file = targets{i}{1};
-    mex_args = targets{i}(2:end);
+    header_deps = targets{i}{2};
+    mex_args = targets{i}(3:end);
 
     [~, name, ~] = fileparts(src_file);
     mex_file = [name '.' mex_ext];
@@ -78,6 +80,17 @@ if do_build
     end
 
     needs_build = isempty(mex_info) || (src_info.datenum > mex_info.datenum);
+
+    % Check if any header dependency is newer than the MEX file
+    if ~needs_build && ~isempty(mex_info)
+      for j = 1:numel(header_deps)
+        hdr_info = dir(header_deps{j});
+        if ~isempty(hdr_info) && (hdr_info.datenum > mex_info.datenum)
+          needs_build = true;
+          break;
+        end
+      end
+    end
 
     if needs_build
       fprintf('Building %s...\n', name);
