@@ -1,15 +1,15 @@
 classdef H265Reader < handle
-    % FFMPEGREADER Wrapper for FFmpeg video reading MEX functions
+    % H265READER Wrapper for H.265 video reading MEX functions
     %   Ensures proper resource cleanup when object is destroyed.
     %
-    %   Example:
+    %   Example (RGB, the default):
     %       vid = H265Reader('movie.mp4');
     %       frame = vid.read(1);
     %       frames = vid.read(1, 100);  % batch read
     %       clear vid;  % automatically closes
     %
-    %       % For grayscale video (returns 2D frames instead of RGB):
-    %       vid = H265Reader('gray_movie.mp4', true);
+    %   Example (grayscale):
+    %       vid = H265Reader('gray_movie.mp4', 'is_gray', true);
 
     properties (SetAccess = private)
         filename
@@ -33,20 +33,28 @@ classdef H265Reader < handle
     end
 
     methods
-        function obj = H265Reader(filename, is_gray)
-            % FFMPEGREADER Open a video file for reading
+        function obj = H265Reader(filename, varargin)
+            % H265READER Open a video file for reading
             %   vid = H265Reader(filename)
-            %   vid = H265Reader(filename, is_gray)
+            %   vid = H265Reader(filename, 'is_gray', true)
             %
-            %   is_gray - optional boolean (default false): if true, return
-            %             grayscale frames (height x width) instead of RGB
-            %             (height x width x 3)
+            %   Optional parameters:
+            %     is_gray - boolean (default: auto-detect from file metadata,
+            %               or false if no metadata). If true, return grayscale
+            %               frames (height x width) instead of RGB (height x width x 3)
 
-            if nargin < 2
-                is_gray = false;
-            end
+            is_gray = myparse(varargin, 'is_gray', []);
 
             obj.video_info = open_h265_video(filename);
+
+            % If is_gray not explicitly set, use metadata from file (if available)
+            if isempty(is_gray)
+                if isfield(obj.video_info, 'is_grayscale') && obj.video_info.is_grayscale >= 0
+                    is_gray = (obj.video_info.is_grayscale == 1);
+                else
+                    is_gray = false;  % Default when no metadata
+                end
+            end
 
             % Add is_gray to video_info for MEX functions
             obj.video_info.is_gray = is_gray;

@@ -138,9 +138,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     codec_ctx->pix_fmt = AV_PIX_FMT_YUV420P;  /* Always use YUV420P for compatibility */
     codec_ctx->gop_size = 50;  /* Keyframe interval */
 
-    /* Set x265 params for closed GOP */
+    /* Set x265 params for closed GOP and quality */
     ret = av_opt_set(codec_ctx->priv_data, "x265-params",
-                     "no-open-gop=1:keyint=50", 0);
+                     "no-open-gop=1:keyint=50:crf=18", 0);
     if (ret < 0) {
         avcodec_free_context(&codec_ctx);
         avformat_free_context(fmt_ctx);
@@ -190,8 +190,14 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         }
     }
 
-    /* Write file header */
-    ret = avformat_write_header(fmt_ctx, NULL);
+    /* Set grayscale metadata */
+    av_dict_set(&fmt_ctx->metadata, "is_grayscale", is_color ? "0" : "1", 0);
+
+    /* Write file header with use_metadata_tags to preserve custom metadata */
+    AVDictionary *options = NULL;
+    av_dict_set(&options, "movflags", "use_metadata_tags", 0);
+    ret = avformat_write_header(fmt_ctx, &options);
+    av_dict_free(&options);
     if (ret < 0) {
         avio_closep(&fmt_ctx->pb);
         avcodec_free_context(&codec_ctx);

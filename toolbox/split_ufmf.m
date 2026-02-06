@@ -5,6 +5,7 @@ function outfiles = split_ufmf(infile,outfilestr,chunksize,varargin)
 
 % read in the header
 header = ufmf_read_header(infile);
+header_cleanup = onCleanup(@() fclose(header.fid));
 endframe = min(endframe,header.nframes);
 noutfiles = ceil((endframe-startframe+1)/chunksize);
 
@@ -27,13 +28,13 @@ for outi = 1:noutfiles,
   if exist(outfiles{outi},'file') && ~dooverwrite,
     res = input(sprintf('File %s exists. Overwrite? (y/N): ',outfiles{outi}),'s');
     if ~strcmpi(res,'y'),
-      fclose(header.fid);
-      return;
+      return;  % header_cleanup will close header.fid
     end
   end
-  
+
   fidout = fopen( outfiles{outi}, 'wb' , 'ieee-le');
   assert(fidout > 0);
+  fidout_cleanup = onCleanup(@() fclose(fidout));
   
   % write the header
   fwrite(fidout,headerbytes);
@@ -79,6 +80,7 @@ for outi = 1:noutfiles,
   
   % write the index
   wrapupUFMF(fidout,index,header.indexlocloc);
-  fclose(fidout);
-  
+  clear fidout_cleanup;  % close output file
+
 end
+% header_cleanup will close header.fid when function returns

@@ -21,8 +21,8 @@ output_file = fullfile(temp_dir, 'test_output.mp4');
 raw_frames = randi([0 255], height, width, frame_count);
 original_frames = uint8(imgaussfilt(double(raw_frames), 5));
 
-% Write frames to file
-writer = H265Writer(output_file, width, height, frame_rate);
+% Write frames to file (is_gray=true for grayscale)
+writer = H265Writer(output_file, width, height, frame_rate, 'is_gray', true);
 
 % Check writer properties
 assert(strcmp(writer.filename, output_file), 'Writer filename mismatch');
@@ -41,8 +41,8 @@ assert(abs(writer.duration() - frame_count/frame_rate) < 0.001, 'Writer duration
 
 clear writer;  % Flush and close
 
-% Read back the file (is_gray=true for grayscale output)
-reader = H265Reader(output_file, true);
+% Read back the file (auto-detects grayscale from metadata)
+reader = H265Reader(output_file);
 
 % Check reader properties
 assert(~isempty(reader.filename), 'Reader filename not set');
@@ -94,13 +94,13 @@ height2 = 128;
 frame_rate2 = 24;
 frame_count2 = 10;
 
-writer2 = H265Writer(output_file2, width2, height2, frame_rate2);
+writer2 = H265Writer(output_file2, width2, height2, frame_rate2, 'is_gray', true);
 for i = 1:frame_count2
     writer2.write(uint8(randi([0 255], height2, width2)));
 end
 clear writer2;
 
-reader2 = H265Reader(output_file2, true);
+reader2 = H265Reader(output_file2);  % Auto-detects grayscale from metadata
 assert(reader2.num_frames == frame_count2, 'Second file frame count mismatch');
 assert(reader2.width == width2, 'Second file width mismatch');
 assert(reader2.height == height2, 'Second file height mismatch');

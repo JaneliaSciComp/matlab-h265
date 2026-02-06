@@ -342,11 +342,19 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     avformat_seek_file(fmt_ctx, video_stream_idx, INT64_MIN, 0, 0, 0);
     avcodec_flush_buffers(codec_ctx);
 
+    /* Check for is_grayscale metadata tag */
+    int is_grayscale = -1;  /* -1 means not specified in metadata */
+    AVDictionaryEntry *tag = av_dict_get(fmt_ctx->metadata, "is_grayscale", NULL, 0);
+    if (tag && tag->value) {
+        is_grayscale = (strcmp(tag->value, "1") == 0) ? 1 : 0;
+    }
+
     /* Create output struct - keep fmt_ctx and codec_ctx open */
     const char *field_names[] = {"filename", "num_frames", "width", "height", "dts",
                                   "fmt_ctx_ptr", "codec_ctx_ptr", "video_stream_idx", "pts_increment",
-                                  "time_base_num", "time_base_den", "frame_rate_num", "frame_rate_den"};
-    plhs[0] = mxCreateStructMatrix(1, 1, 13, field_names);
+                                  "time_base_num", "time_base_den", "frame_rate_num", "frame_rate_den",
+                                  "is_grayscale"};
+    plhs[0] = mxCreateStructMatrix(1, 1, 14, field_names);
 
     /* Helper variables for typed arrays */
     mxArray *mx_int32;
@@ -403,6 +411,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     mx_int32 = mxCreateNumericMatrix(1, 1, mxINT32_CLASS, mxREAL);
     *(int32_t *)mxGetData(mx_int32) = frame_rate.den;
     mxSetField(plhs[0], 0, "frame_rate_den", mx_int32);
+
+    /* Set is_grayscale (-1 if not in metadata, 0 or 1 otherwise) */
+    mxSetField(plhs[0], 0, "is_grayscale", mxCreateDoubleScalar((double)is_grayscale));
 
     /* Free temporary arrays (but NOT fmt_ctx or codec_ctx - they stay open) */
     mxFree(dts_array);

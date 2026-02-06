@@ -21,8 +21,8 @@ output_file = fullfile(temp_dir, 'test_output.mp4');
 raw_frames = randi([0 255], height, width, 3, frame_count);
 original_frames = uint8(imgaussfilt(double(raw_frames), 5));
 
-% Write frames to file (is_color=true for RGB)
-writer = H265Writer(output_file, width, height, frame_rate, true);
+% Write frames to file (RGB is the default)
+writer = H265Writer(output_file, width, height, frame_rate);
 
 % Check writer properties
 assert(strcmp(writer.filename, output_file), 'Writer filename mismatch');
@@ -99,7 +99,7 @@ height2 = 128;
 frame_rate2 = 24;
 frame_count2 = 10;
 
-writer2 = H265Writer(output_file2, width2, height2, frame_rate2, true);
+writer2 = H265Writer(output_file2, width2, height2, frame_rate2);
 for i = 1:frame_count2
     writer2.write(uint8(randi([0 255], height2, width2, 3)));
 end
