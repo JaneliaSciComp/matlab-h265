@@ -4,11 +4,23 @@ function build_mex(varargin)
 % Only rebuilds files where the source is newer than the MEX file.
 %
 % Usage:
-%   build_mex          - Build out-of-date MEX files
-%   build_mex --clean  - Delete all MEX files
+%   build_mex            - Build out-of-date MEX files
+%   build_mex --rebuild  - Delete all MEX files, then rebuild all
+%   build_mex --clean    - Delete all MEX files
 
-% Parse arguments
-do_clean = nargin > 0 && strcmp(varargin{1}, '--clean');
+% Parse arguments to determine what to do
+if nargin == 0
+    do_clean = false;
+    do_build = true;
+elseif strcmp(varargin{1}, '--clean')
+    do_clean = true;
+    do_build = false;
+elseif strcmp(varargin{1}, '--rebuild')
+    do_clean = true;
+    do_build = true;
+else
+    error('build_mex:badArg', 'Unknown argument: %s', varargin{1});
+end
 
 % Define all MEX targets: {source_file, mex_args...}
 targets = {
@@ -25,8 +37,8 @@ targets = {
 
 mex_ext = mexext;
 
+% Clean step: delete all MEX files
 if do_clean
-    % Delete all MEX files
     deleted_count = 0;
     for i = 1:numel(targets)
         src_file = targets{i}{1};
@@ -39,13 +51,17 @@ if do_clean
             deleted_count = deleted_count + 1;
         end
     end
-    if deleted_count == 0
-        fprintf('Nothing to clean.\n');
-    else
-        fprintf('Deleted %d file(s).\n', deleted_count);
+    if ~do_build
+        if deleted_count == 0
+            fprintf('Nothing to clean.\n');
+        else
+            fprintf('Deleted %d file(s).\n', deleted_count);
+        end
     end
-else
-    % Build out-of-date MEX files
+end
+
+% Build step: build out-of-date MEX files
+if do_build
     built_count = 0;
     for i = 1:numel(targets)
         src_file = targets{i}{1};
@@ -54,7 +70,6 @@ else
         [~, name, ~] = fileparts(src_file);
         mex_file = [name '.' mex_ext];
 
-        % Check if rebuild is needed
         src_info = dir(src_file);
         mex_info = dir(mex_file);
 
@@ -77,4 +92,5 @@ else
         fprintf('Built %d file(s).\n', built_count);
     end
 end
-end
+
+end  % function
