@@ -1,16 +1,16 @@
 /*
- * read_ffmpeg_frame.c
+ * read_h265_frame.c
  * MEX function to read a frame at index i from a video file using FFmpeg.
  * Uses the persistent decoder context from open_ffmpeg_video for fast access.
  *
- * Usage: frame = read_ffmpeg_frame(video_info, frame_index)
+ * Usage: frame = read_h265_frame(video_info, frame_index)
  *   video_info  - struct returned by open_ffmpeg_video
  *   frame_index - 1-based frame index
  *   frame       - grayscale (height x width) or RGB (height x width x 3) uint8
  *                 Output format depends on source video pixel format.
  *
  * Compile with:
- *   mex read_ffmpeg_frame.c -lavformat -lavcodec -lavutil -lswscale
+ *   mex read_h265_frame.c -lavformat -lavcodec -lavutil -lswscale
  */
 
 #include "mex.h"
@@ -40,16 +40,16 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 
     /* Check arguments */
     if (nrhs != 2) {
-        mexErrMsgIdAndTxt("read_ffmpeg_frame:nrhs", "Two inputs required: video_info and frame_index");
+        mexErrMsgIdAndTxt("read_h265_frame:nrhs", "Two inputs required: video_info and frame_index");
     }
     if (nlhs > 1) {
-        mexErrMsgIdAndTxt("read_ffmpeg_frame:nlhs", "One output allowed");
+        mexErrMsgIdAndTxt("read_h265_frame:nlhs", "One output allowed");
     }
     if (!mxIsStruct(prhs[0])) {
-        mexErrMsgIdAndTxt("read_ffmpeg_frame:notStruct", "First argument must be video_info struct from open_ffmpeg_video");
+        mexErrMsgIdAndTxt("read_h265_frame:notStruct", "First argument must be video_info struct from open_ffmpeg_video");
     }
     if (!mxIsDouble(prhs[1]) || mxGetNumberOfElements(prhs[1]) != 1) {
-        mexErrMsgIdAndTxt("read_ffmpeg_frame:notScalar", "Frame index must be a scalar");
+        mexErrMsgIdAndTxt("read_h265_frame:notScalar", "Frame index must be a scalar");
     }
 
     /* Extract fields from video_info struct */
@@ -61,7 +61,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     mxArray *pts_inc_field = mxGetField(prhs[0], 0, "pts_increment");
 
     if (!dts_field || !num_frames_field || !fmt_ctx_field || !codec_ctx_field || !stream_idx_field || !pts_inc_field) {
-        mexErrMsgIdAndTxt("read_ffmpeg_frame:badStruct",
+        mexErrMsgIdAndTxt("read_h265_frame:badStruct",
             "video_info must have dts, num_frames, fmt_ctx_ptr, codec_ctx_ptr, video_stream_idx, and pts_increment fields");
     }
 
@@ -76,7 +76,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 
     /* Validate pointers */
     if (!fmt_ctx || !codec_ctx) {
-        mexErrMsgIdAndTxt("read_ffmpeg_frame:nullPtr",
+        mexErrMsgIdAndTxt("read_h265_frame:nullPtr",
             "Invalid video_info: null pointers. Was close_ffmpeg_video already called?");
     }
 
@@ -84,7 +84,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     target_frame = (int)mxGetScalar(prhs[1]) - 1;
 
     if (target_frame < 0 || target_frame >= num_frames) {
-        mexErrMsgIdAndTxt("read_ffmpeg_frame:invalidIndex", "Frame index must be between 1 and %d", num_frames);
+        mexErrMsgIdAndTxt("read_h265_frame:invalidIndex", "Frame index must be between 1 and %d", num_frames);
     }
 
     /* Look up the DTS for seeking, and compute target PTS for matching */
@@ -113,7 +113,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         av_frame_free(&frame);
         av_frame_free(&out_frame);
         av_packet_free(&pkt);
-        mexErrMsgIdAndTxt("read_ffmpeg_frame:allocFrame", "Could not allocate frame/packet");
+        mexErrMsgIdAndTxt("read_h265_frame:allocFrame", "Could not allocate frame/packet");
     }
 
     /* Seek using the DTS from our lookup table */
@@ -153,7 +153,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
                     av_packet_free(&pkt);
                     av_frame_free(&frame);
                     av_frame_free(&out_frame);
-                    mexErrMsgIdAndTxt("read_ffmpeg_frame:decode", "Error during decoding");
+                    mexErrMsgIdAndTxt("read_h265_frame:decode", "Error during decoding");
                 }
 
                 /* Check if this is the target frame by PTS */
@@ -178,7 +178,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
                         av_packet_free(&pkt);
                         av_frame_free(&frame);
                         av_frame_free(&out_frame);
-                        mexErrMsgIdAndTxt("read_ffmpeg_frame:sws", "Could not create scaler context");
+                        mexErrMsgIdAndTxt("read_h265_frame:sws", "Could not create scaler context");
                     }
 
                     /* Convert to output format */
@@ -259,7 +259,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
                 av_packet_free(&pkt);
                 av_frame_free(&frame);
                 av_frame_free(&out_frame);
-                mexErrMsgIdAndTxt("read_ffmpeg_frame:sws", "Could not create scaler context");
+                mexErrMsgIdAndTxt("read_h265_frame:sws", "Could not create scaler context");
             }
 
             /* Convert to output format */
@@ -309,7 +309,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     av_packet_free(&pkt);
     av_frame_free(&frame);
     av_frame_free(&out_frame);
-    mexErrMsgIdAndTxt("read_ffmpeg_frame:notFound",
+    mexErrMsgIdAndTxt("read_h265_frame:notFound",
                       "Frame %d not found. target_pts=%lld, read %d packets with DTS range [%lld, %lld]",
                       target_frame + 1,
                       (long long)target_pts,

@@ -1,9 +1,9 @@
 /*
- * open_ffmpeg_video.c
+ * open_h265_video.c
  * MEX function to open a video file, build a DTS lookup table, and keep
  * the decoder open for fast subsequent frame reads.
  *
- * Usage: video_info = open_ffmpeg_video(filename)
+ * Usage: video_info = open_h265_video(filename)
  *
  * Returns a struct with fields:
  *   filename   - the video file path
@@ -18,7 +18,7 @@
  * IMPORTANT: Call close_ffmpeg_video(video_info) when done to free resources.
  *
  * Compile with:
- *   mex open_ffmpeg_video.c -lavformat -lavcodec -lavutil
+ *   mex open_h265_video.c -lavformat -lavcodec -lavutil
  */
 
 #include "mex.h"
@@ -89,10 +89,10 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 
     /* Check arguments */
     if (nrhs != 1) {
-        mexErrMsgIdAndTxt("open_ffmpeg_video:nrhs", "One input required: filename");
+        mexErrMsgIdAndTxt("open_h265_video:nrhs", "One input required: filename");
     }
     if (!mxIsChar(prhs[0])) {
-        mexErrMsgIdAndTxt("open_ffmpeg_video:notString", "Filename must be a string");
+        mexErrMsgIdAndTxt("open_h265_video:notString", "Filename must be a string");
     }
 
     filename = mxArrayToString(prhs[0]);
@@ -100,14 +100,14 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     /* Open input file */
     if (avformat_open_input(&fmt_ctx, filename, NULL, NULL) < 0) {
         mxFree(filename);
-        mexErrMsgIdAndTxt("open_ffmpeg_video:openFailed", "Could not open input file");
+        mexErrMsgIdAndTxt("open_h265_video:openFailed", "Could not open input file");
     }
 
     /* Find stream info */
     if (avformat_find_stream_info(fmt_ctx, NULL) < 0) {
         avformat_close_input(&fmt_ctx);
         mxFree(filename);
-        mexErrMsgIdAndTxt("open_ffmpeg_video:streamInfo", "Could not find stream info");
+        mexErrMsgIdAndTxt("open_h265_video:streamInfo", "Could not find stream info");
     }
 
     /* Find video stream */
@@ -122,7 +122,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     if (video_stream_idx == -1) {
         avformat_close_input(&fmt_ctx);
         mxFree(filename);
-        mexErrMsgIdAndTxt("open_ffmpeg_video:noVideo", "No video stream found");
+        mexErrMsgIdAndTxt("open_h265_video:noVideo", "No video stream found");
     }
 
     /* Get dimensions */
@@ -134,7 +134,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     if (frame_rate.num == 0 || frame_rate.den == 0) {
         avformat_close_input(&fmt_ctx);
         mxFree(filename);
-        mexErrMsgIdAndTxt("open_ffmpeg_video:noFrameRate", "Could not determine frame rate");
+        mexErrMsgIdAndTxt("open_h265_video:noFrameRate", "Could not determine frame rate");
     }
 
     /* pts_increment = time_base / frame_rate (in time_base units per frame)
@@ -148,7 +148,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         avcodec_free_context(&codec_ctx);
         avformat_close_input(&fmt_ctx);
         mxFree(filename);
-        mexErrMsgIdAndTxt("open_ffmpeg_video:badFrameRate",
+        mexErrMsgIdAndTxt("open_h265_video:badFrameRate",
             "Frame rate (%d/%d) and time base (%d/%d) are incompatible. "
             "PTS increment would be non-integer: %lld/%lld. "
             "Re-encode with a compatible frame rate.",
@@ -163,14 +163,14 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     if (!codec) {
         avformat_close_input(&fmt_ctx);
         mxFree(filename);
-        mexErrMsgIdAndTxt("open_ffmpeg_video:noCodec", "Could not find decoder");
+        mexErrMsgIdAndTxt("open_h265_video:noCodec", "Could not find decoder");
     }
 
     /* Verify this is a software decoder, not hardware */
     if (codec->capabilities & AV_CODEC_CAP_HARDWARE) {
         avformat_close_input(&fmt_ctx);
         mxFree(filename);
-        mexErrMsgIdAndTxt("open_ffmpeg_video:hwDecoder",
+        mexErrMsgIdAndTxt("open_h265_video:hwDecoder",
             "Got hardware decoder '%s', but software decoding is required", codec->name);
     }
 
@@ -179,7 +179,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     if (!codec_ctx) {
         avformat_close_input(&fmt_ctx);
         mxFree(filename);
-        mexErrMsgIdAndTxt("open_ffmpeg_video:allocCodec", "Could not allocate codec context");
+        mexErrMsgIdAndTxt("open_h265_video:allocCodec", "Could not allocate codec context");
     }
 
     /* Copy codec parameters */
@@ -187,7 +187,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         avcodec_free_context(&codec_ctx);
         avformat_close_input(&fmt_ctx);
         mxFree(filename);
-        mexErrMsgIdAndTxt("open_ffmpeg_video:codecParams", "Could not copy codec parameters");
+        mexErrMsgIdAndTxt("open_h265_video:codecParams", "Could not copy codec parameters");
     }
 
     /* Open codec */
@@ -195,7 +195,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         avcodec_free_context(&codec_ctx);
         avformat_close_input(&fmt_ctx);
         mxFree(filename);
-        mexErrMsgIdAndTxt("open_ffmpeg_video:openCodec", "Could not open codec");
+        mexErrMsgIdAndTxt("open_h265_video:openCodec", "Could not open codec");
     }
 
     /* Allocate packet */
@@ -204,7 +204,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         avcodec_free_context(&codec_ctx);
         avformat_close_input(&fmt_ctx);
         mxFree(filename);
-        mexErrMsgIdAndTxt("open_ffmpeg_video:allocPkt", "Could not allocate packet");
+        mexErrMsgIdAndTxt("open_h265_video:allocPkt", "Could not allocate packet");
     }
 
     /* Check if this is HEVC and get NAL length size for open GOP detection */
@@ -239,7 +239,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
                     avcodec_free_context(&codec_ctx);
                     avformat_close_input(&fmt_ctx);
                     mxFree(filename);
-                    mexErrMsgIdAndTxt("open_ffmpeg_video:openGOP",
+                    mexErrMsgIdAndTxt("open_h265_video:openGOP",
                         "Video uses open GOP encoding (found NAL unit type %d: %s). "
                         "Open GOP videos have frames that cannot be decoded after seeking. "
                         "Please re-encode with closed GOP (e.g., -x265-params no-open-gop=1) "
@@ -257,7 +257,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         avcodec_free_context(&codec_ctx);
         avformat_close_input(&fmt_ctx);
         mxFree(filename);
-        mexErrMsgIdAndTxt("open_ffmpeg_video:noFrames", "No frames found in video");
+        mexErrMsgIdAndTxt("open_h265_video:noFrames", "No frames found in video");
     }
 
     /* Allocate DTS array and frame count array */
@@ -270,7 +270,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         avcodec_free_context(&codec_ctx);
         avformat_close_input(&fmt_ctx);
         mxFree(filename);
-        mexErrMsgIdAndTxt("open_ffmpeg_video:allocArrays", "Could not allocate arrays");
+        mexErrMsgIdAndTxt("open_h265_video:allocArrays", "Could not allocate arrays");
     }
 
     /* Seek back to beginning */
@@ -291,7 +291,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
                 avcodec_free_context(&codec_ctx);
                 avformat_close_input(&fmt_ctx);
                 mxFree(filename);
-                mexErrMsgIdAndTxt("open_ffmpeg_video:misalignedPTS",
+                mexErrMsgIdAndTxt("open_h265_video:misalignedPTS",
                     "PTS %lld is not a multiple of pts_increment %lld. "
                     "Frame timing is inconsistent.",
                     (long long)pts, (long long)pts_increment);
@@ -326,7 +326,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         avcodec_free_context(&codec_ctx);
         avformat_close_input(&fmt_ctx);
         mxFree(filename);
-        mexErrMsgIdAndTxt("open_ffmpeg_video:missingPTS",
+        mexErrMsgIdAndTxt("open_h265_video:missingPTS",
             "%d of %d frames have no PTS mapping", pts_missing_count, num_frames);
     }
     if (pts_duplicate_count > 0) {
@@ -334,7 +334,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         avcodec_free_context(&codec_ctx);
         avformat_close_input(&fmt_ctx);
         mxFree(filename);
-        mexErrMsgIdAndTxt("open_ffmpeg_video:duplicatePTS",
+        mexErrMsgIdAndTxt("open_h265_video:duplicatePTS",
             "%d frames have duplicate PTS mappings", pts_duplicate_count);
     }
 

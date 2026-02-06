@@ -13,10 +13,10 @@ do_clean = nargin > 0 && strcmp(varargin{1}, '--clean');
 % Define all MEX targets: {source_file, mex_args...}
 targets = {
     % Video reading functions
-    {'open_ffmpeg_video.c', '-lavformat', '-lavcodec', '-lavutil'}
-    {'read_ffmpeg_frame.c', '-lavformat', '-lavcodec', '-lavutil', '-lswscale'}
-    {'read_ffmpeg_frames.c', '-lavformat', '-lavcodec', '-lavutil', '-lswscale'}
-    {'close_ffmpeg_video.c', '-lavformat', '-lavcodec', '-lavutil'}
+    {'open_h265_video.c', '-lavformat', '-lavcodec', '-lavutil'}
+    {'read_h265_frame.c', '-lavformat', '-lavcodec', '-lavutil', '-lswscale'}
+    {'read_h265_frames.c', '-lavformat', '-lavcodec', '-lavutil', '-lswscale'}
+    {'close_h265_video.c', '-lavformat', '-lavcodec', '-lavutil'}
     % H.265 writing functions
     {'open_h265_write.c', '-lavformat', '-lavcodec', '-lavutil', '-lswscale'}
     {'write_h265_frames.c', '-lavformat', '-lavcodec', '-lavutil', '-lswscale'}

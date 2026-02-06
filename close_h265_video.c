@@ -1,15 +1,15 @@
 /*
- * close_ffmpeg_video.c
+ * close_h265_video.c
  * MEX function to close a video file and free FFmpeg resources.
  *
- * Usage: close_ffmpeg_video(video_info)
+ * Usage: close_h265_video(video_info)
  *   video_info - struct returned by open_ffmpeg_video
  *
  * After calling this function, the video_info struct should not be used
  * with read_ffmpeg_frame.
  *
  * Compile with:
- *   mex close_ffmpeg_video.c -lavformat -lavcodec -lavutil
+ *   mex close_h265_video.c -lavformat -lavcodec -lavutil
  */
 
 #include "mex.h"
@@ -24,10 +24,10 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 
     /* Check arguments */
     if (nrhs != 1) {
-        mexErrMsgIdAndTxt("close_ffmpeg_video:nrhs", "One input required: video_info");
+        mexErrMsgIdAndTxt("close_h265_video:nrhs", "One input required: video_info");
     }
     if (!mxIsStruct(prhs[0])) {
-        mexErrMsgIdAndTxt("close_ffmpeg_video:notStruct", "Argument must be video_info struct from open_ffmpeg_video");
+        mexErrMsgIdAndTxt("close_h265_video:notStruct", "Argument must be video_info struct from open_ffmpeg_video");
     }
 
     /* Extract pointer fields */
@@ -35,7 +35,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     mxArray *codec_ctx_field = mxGetField(prhs[0], 0, "codec_ctx_ptr");
 
     if (!fmt_ctx_field || !codec_ctx_field) {
-        mexErrMsgIdAndTxt("close_ffmpeg_video:badStruct",
+        mexErrMsgIdAndTxt("close_h265_video:badStruct",
             "video_info must have fmt_ctx_ptr and codec_ctx_ptr fields");
     }
 

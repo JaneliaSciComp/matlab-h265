@@ -29,7 +29,7 @@ classdef H265Reader < handle
     end
 
     properties (Access = private)
-        video_info  % struct from open_ffmpeg_video
+        video_info  % struct from open_h265_video
     end
 
     methods
@@ -46,7 +46,7 @@ classdef H265Reader < handle
                 is_gray = false;
             end
 
-            obj.video_info = open_ffmpeg_video(filename);
+            obj.video_info = open_h265_video(filename);
 
             % Add is_gray to video_info for MEX functions
             obj.video_info.is_gray = is_gray;
@@ -73,16 +73,16 @@ classdef H265Reader < handle
 
             if nargin < 3
                 % Single frame
-                frame = read_ffmpeg_frame(obj.video_info, start_frame);
+                frame = read_h265_frame(obj.video_info, start_frame);
             else
                 % Batch read
-                frame = read_ffmpeg_frames(obj.video_info, start_frame, end_frame);
+                frame = read_h265_frames(obj.video_info, start_frame, end_frame);
             end
         end
 
         function delete(obj)
             % DELETE Destructor - ensures resources are freed
-            close_ffmpeg_video(obj.video_info);
+            close_h265_video(obj.video_info);
         end
 
         function fr = get.frame_rate(obj)
