@@ -18,6 +18,8 @@ classdef H265Writer < handle
         height
         frame_rate
         is_gray
+        gop_size
+        crf
         frames_written = 0
     end
 
@@ -30,21 +32,28 @@ classdef H265Writer < handle
             % H265WRITER Open a video file for writing
             %   vid = H265Writer(filename, width, height, frame_rate)
             %   vid = H265Writer(filename, width, height, frame_rate, 'is_gray', true)
+            %   vid = H265Writer(filename, width, height, frame_rate, 'crf', 23, 'gop_size', 30)
             %
             %   frame_rate can be a scalar (e.g., 30) or [num, den] (e.g., [30000, 1001])
             %
             %   Optional parameters:
-            %     is_gray - boolean (default false): false for RGB color, true for grayscale
+            %     is_gray  - boolean (default false): false for RGB color, true for grayscale
+            %     gop_size - keyframe interval in frames (default 50)
+            %     crf      - quality setting, 0-51 where lower is better quality (default 18)
 
-            is_gray = myparse(varargin, 'is_gray', false);
+            [is_gray, gop_size, crf] = myparse(varargin, ...
+                'is_gray', false, 'gop_size', 50, 'crf', 18);
 
             is_color = ~is_gray;
-            obj.writer_info = open_h265_write(filename, width, height, frame_rate, is_color);
+            obj.writer_info = open_h265_write(filename, width, height, frame_rate, ...
+                is_color, gop_size, crf);
 
             obj.filename = filename;
             obj.width = width;
             obj.height = height;
             obj.is_gray = is_gray;
+            obj.gop_size = gop_size;
+            obj.crf = crf;
             if isscalar(frame_rate)
                 obj.frame_rate = frame_rate;
             else

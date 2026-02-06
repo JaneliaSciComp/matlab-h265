@@ -2,12 +2,14 @@
  * open_h265_write.c
  * MEX function to open a video file for writing H.265 with closed GOP.
  *
- * Usage: writer = open_h265_write(filename, width, height, frame_rate, is_color)
+ * Usage: writer = open_h265_write(filename, width, height, frame_rate, is_color, gop_size, crf)
  *   filename   - output file path (must end in .mp4)
  *   width      - frame width
  *   height     - frame height
  *   frame_rate - frame rate as [num, den] or scalar (e.g., [14997, 100] or 30)
- *   is_color   - optional boolean (default 0): 0 for grayscale, 1 for RGB color
+ *   is_color   - boolean: 0 for grayscale, 1 for RGB color
+ *   gop_size   - keyframe interval in frames (e.g., 50)
+ *   crf        - quality setting, 0-51 where lower is better (e.g., 18)
  *
  * Returns a struct with encoder context pointers for write_h265_frame.
  * IMPORTANT: Call close_h265_write(writer) when done to flush and close.
@@ -37,7 +39,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     char *filename;
     int width, height;
     int frame_rate_num, frame_rate_den;
-    int is_color = 0;  /* Default to grayscale */
+    int is_color;
+    int gop_size;
+    int crf;
 
     AVFormatContext *fmt_ctx = NULL;
     AVCodecContext *codec_ctx = NULL;
@@ -49,9 +53,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     int ret;
 
     /* Check arguments */
-    if (nrhs < 4 || nrhs > 5) {
+    if (nrhs != 7) {
         mexErrMsgIdAndTxt("open_h265_write:nrhs",
-            "Four or five inputs required: filename, width, height, frame_rate, [is_color]");
+            "Seven inputs required: filename, width, height, frame_rate, is_color, gop_size, crf");
     }
     if (!mxIsChar(prhs[0])) {
         mexErrMsgIdAndTxt("open_h265_write:notString", "Filename must be a string");
@@ -81,9 +85,21 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
             "Frame rate must be scalar or [num, den]");
     }
 
-    /* Parse optional is_color parameter */
-    if (nrhs >= 5) {
-        is_color = (int)mxGetScalar(prhs[4]) != 0;
+    /* Parse is_color, gop_size, crf parameters */
+    is_color = (int)mxGetScalar(prhs[4]) != 0;
+    gop_size = (int)mxGetScalar(prhs[5]);
+    crf = (int)mxGetScalar(prhs[6]);
+
+    /* Validate encoding parameters */
+    if (gop_size < 1) {
+        mxFree(filename);
+        mexErrMsgIdAndTxt("open_h265_write:badGopSize",
+            "gop_size must be at least 1");
+    }
+    if (crf < 0 || crf > 51) {
+        mxFree(filename);
+        mexErrMsgIdAndTxt("open_h265_write:badCrf",
+            "crf must be between 0 and 51");
     }
 
     /* Validate dimensions */
@@ -136,11 +152,12 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     codec_ctx->time_base = (AVRational){frame_rate_den, frame_rate_num};
     codec_ctx->framerate = (AVRational){frame_rate_num, frame_rate_den};
     codec_ctx->pix_fmt = AV_PIX_FMT_YUV420P;  /* Always use YUV420P for compatibility */
-    codec_ctx->gop_size = 50;  /* Keyframe interval */
+    codec_ctx->gop_size = gop_size;
 
     /* Set x265 params for closed GOP and quality */
-    ret = av_opt_set(codec_ctx->priv_data, "x265-params",
-                     "no-open-gop=1:keyint=50:crf=18", 0);
+    char x265_params[128];
+    snprintf(x265_params, sizeof(x265_params), "no-open-gop=1:keyint=%d:crf=%d", gop_size, crf);
+    ret = av_opt_set(codec_ctx->priv_data, "x265-params", x265_params, 0);
     if (ret < 0) {
         avcodec_free_context(&codec_ctx);
         avformat_free_context(fmt_ctx);
