@@ -23,7 +23,7 @@ function h265_from_ufmf(h265_file, ufmf_file, varargin)
 %     h265_from_ufmf('movie.mp4', 'movie.ufmf', 'frame_count', 10000);
 
 [block_size, frame_rate, frame_count] = myparse(varargin, ...
-    'block_size', 1000, 'frame_rate', [], 'frame_count', []);
+  'block_size', 1000, 'frame_rate', [], 'frame_count', []);
 
 % Read UFMF header
 header = ufmf_read_header(ufmf_file);
@@ -36,21 +36,21 @@ is_color = header.ncolors == 3;
 
 % Determine frame rate
 if isempty(frame_rate)
-    if header.nframes > 1
-        timestamps = header.timestamps;
-        avg_dt = (timestamps(end) - timestamps(1)) / (header.nframes - 1);
-        frame_rate = 1 / avg_dt;
-    else
-        error('h265_from_ufmf:noFrameRate', ...
-            'Cannot compute frame rate from single-frame video. Specify ''frame_rate'' manually.');
-    end
+  if header.nframes > 1
+    timestamps = header.timestamps;
+    avg_dt = (timestamps(end) - timestamps(1)) / (header.nframes - 1);
+    frame_rate = 1 / avg_dt;
+  else
+    error('h265_from_ufmf:noFrameRate', ...
+      'Cannot compute frame rate from single-frame video. Specify ''frame_rate'' manually.');
+  end
 end
 
 % Determine number of frames to convert
 if isempty(frame_count)
-    num_frames = header.nframes;
+  num_frames = header.nframes;
 else
-    num_frames = min(frame_count, header.nframes);
+  num_frames = min(frame_count, header.nframes);
 end
 
 % Create H.265 writer
@@ -61,36 +61,36 @@ num_blocks = ceil(num_frames / block_size);
 frames_written = 0;
 
 for block = 1:num_blocks
-    % Compute frame range for this block
-    start_frame = (block - 1) * block_size + 1;
-    end_frame = min(block * block_size, num_frames);
-    frames_in_block = end_frame - start_frame + 1;
+  % Compute frame range for this block
+  start_frame = (block - 1) * block_size + 1;
+  end_frame = min(block * block_size, num_frames);
+  frames_in_block = end_frame - start_frame + 1;
 
-    % Pre-allocate block array
+  % Pre-allocate block array
+  if is_color
+    block_data = zeros(height, width, 3, frames_in_block, 'uint8');
+  else
+    block_data = zeros(height, width, frames_in_block, 'uint8');
+  end
+
+  % Read frames in this block
+  for i = 1:frames_in_block
+    frame_idx = start_frame + i - 1;
+    im = ufmf_read_frame(header, frame_idx);
+
     if is_color
-        block_data = zeros(height, width, 3, frames_in_block, 'uint8');
+      block_data(:, :, :, i) = im;
     else
-        block_data = zeros(height, width, frames_in_block, 'uint8');
+      block_data(:, :, i) = im;
     end
+  end
 
-    % Read frames in this block
-    for i = 1:frames_in_block
-        frame_idx = start_frame + i - 1;
-        im = ufmf_read_frame(header, frame_idx);
+  % Write block to H.265
+  writer.write(block_data);
 
-        if is_color
-            block_data(:, :, :, i) = im;
-        else
-            block_data(:, :, i) = im;
-        end
-    end
-
-    % Write block to H.265
-    writer.write(block_data);
-
-    frames_written = frames_written + frames_in_block;
-    fprintf('Converted %d/%d frames (%.1f%%)\n', frames_written, num_frames, ...
-        100 * frames_written / num_frames);
+  frames_written = frames_written + frames_in_block;
+  fprintf('Converted %d/%d frames (%.1f%%)\n', frames_written, num_frames, ...
+    100 * frames_written / num_frames);
 end
 
 % Cleanup: writer closes automatically, header_cleanup closes file

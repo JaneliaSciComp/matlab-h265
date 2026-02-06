@@ -16,7 +16,7 @@ gray_frames = uint8(imgaussfilt(double(raw_gray), 5));
 fprintf('Writing test_gray.mp4...\n');
 writer = H265Writer('test_gray.mp4', width, height, frame_rate, 'is_gray', true);
 for i = 1:frame_count
-    writer.write(gray_frames(:,:,i));
+  writer.write(gray_frames(:,:,i));
 end
 clear writer;
 fprintf('  Written %d frames\n', frame_count);
@@ -30,7 +30,7 @@ rgb_frames = uint8(imgaussfilt(double(raw_rgb), 5));
 fprintf('Writing test_rgb.mp4...\n');
 writer = H265Writer('test_rgb.mp4', width, height, frame_rate);
 for i = 1:frame_count
-    writer.write(rgb_frames(:,:,:,i));
+  writer.write(rgb_frames(:,:,:,i));
 end
 clear writer;
 fprintf('  Written %d frames\n', frame_count);

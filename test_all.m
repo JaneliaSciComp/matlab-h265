@@ -24,16 +24,16 @@ errors = {};
 fprintf('Running %d tests...\n\n', num_tests);
 
 for i = 1:num_tests
-    func_name = test_funcs{i};
-    try
-        feval(func_name);
-        passed{end+1} = func_name; %#ok<AGROW>
-        fprintf('  PASS: %s\n', func_name);
-    catch ME
-        failed{end+1} = func_name; %#ok<AGROW>
-        errors{end+1} = ME.message; %#ok<AGROW>
-        fprintf('  FAIL: %s\n', func_name);
-    end
+  func_name = test_funcs{i};
+  try
+    feval(func_name);
+    passed{end+1} = func_name; %#ok<AGROW>
+    fprintf('  PASS: %s\n', func_name);
+  catch ME
+    failed{end+1} = func_name; %#ok<AGROW>
+    errors{end+1} = ME.message; %#ok<AGROW>
+    fprintf('  FAIL: %s\n', func_name);
+  end
 end
 
 fprintf('\n');

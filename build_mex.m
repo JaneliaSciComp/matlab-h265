@@ -10,87 +10,87 @@ function build_mex(varargin)
 
 % Parse arguments to determine what to do
 if nargin == 0
-    do_clean = false;
-    do_build = true;
+  do_clean = false;
+  do_build = true;
 elseif strcmp(varargin{1}, '--clean')
-    do_clean = true;
-    do_build = false;
+  do_clean = true;
+  do_build = false;
 elseif strcmp(varargin{1}, '--rebuild')
-    do_clean = true;
-    do_build = true;
+  do_clean = true;
+  do_build = true;
 else
-    error('build_mex:badArg', 'Unknown argument: %s', varargin{1});
+  error('build_mex:badArg', 'Unknown argument: %s', varargin{1});
 end
 
 % Define all MEX targets: {source_file, mex_args...}
 targets = {
-    % Video reading functions
-    {'open_h265_video.c', '-lavformat', '-lavcodec', '-lavutil'}
-    {'read_h265_frame.c', '-lavformat', '-lavcodec', '-lavutil', '-lswscale'}
-    {'read_h265_frames.c', '-lavformat', '-lavcodec', '-lavutil', '-lswscale'}
-    {'close_h265_video.c', '-lavformat', '-lavcodec', '-lavutil'}
-    % H.265 writing functions
-    {'open_h265_write.c', '-lavformat', '-lavcodec', '-lavutil', '-lswscale'}
-    {'write_h265_frames.c', '-lavformat', '-lavcodec', '-lavutil', '-lswscale'}
-    {'close_h265_write.c', '-lavformat', '-lavcodec', '-lavutil', '-lswscale'}
+  % Video reading functions
+  {'open_h265_video.c', '-lavformat', '-lavcodec', '-lavutil'}
+  {'read_h265_frame.c', '-lavformat', '-lavcodec', '-lavutil', '-lswscale'}
+  {'read_h265_frames.c', '-lavformat', '-lavcodec', '-lavutil', '-lswscale'}
+  {'close_h265_video.c', '-lavformat', '-lavcodec', '-lavutil'}
+  % H.265 writing functions
+  {'open_h265_write.c', '-lavformat', '-lavcodec', '-lavutil', '-lswscale'}
+  {'write_h265_frames.c', '-lavformat', '-lavcodec', '-lavutil', '-lswscale'}
+  {'close_h265_write.c', '-lavformat', '-lavcodec', '-lavutil', '-lswscale'}
 };
 
 mex_ext = mexext;
 
 % Clean step: delete all MEX files
 if do_clean
-    deleted_count = 0;
-    for i = 1:numel(targets)
-        src_file = targets{i}{1};
-        [~, name, ~] = fileparts(src_file);
-        mex_file = [name '.' mex_ext];
+  deleted_count = 0;
+  for i = 1:numel(targets)
+    src_file = targets{i}{1};
+    [~, name, ~] = fileparts(src_file);
+    mex_file = [name '.' mex_ext];
 
-        if exist(mex_file, 'file')
-            delete(mex_file);
-            fprintf('Deleted %s\n', mex_file);
-            deleted_count = deleted_count + 1;
-        end
+    if exist(mex_file, 'file')
+      delete(mex_file);
+      fprintf('Deleted %s\n', mex_file);
+      deleted_count = deleted_count + 1;
     end
-    if ~do_build
-        if deleted_count == 0
-            fprintf('Nothing to clean.\n');
-        else
-            fprintf('Deleted %d file(s).\n', deleted_count);
-        end
+  end
+  if ~do_build
+    if deleted_count == 0
+      fprintf('Nothing to clean.\n');
+    else
+      fprintf('Deleted %d file(s).\n', deleted_count);
     end
+  end
 end
 
 % Build step: build out-of-date MEX files
 if do_build
-    built_count = 0;
-    for i = 1:numel(targets)
-        src_file = targets{i}{1};
-        mex_args = targets{i}(2:end);
+  built_count = 0;
+  for i = 1:numel(targets)
+    src_file = targets{i}{1};
+    mex_args = targets{i}(2:end);
 
-        [~, name, ~] = fileparts(src_file);
-        mex_file = [name '.' mex_ext];
+    [~, name, ~] = fileparts(src_file);
+    mex_file = [name '.' mex_ext];
 
-        src_info = dir(src_file);
-        mex_info = dir(mex_file);
+    src_info = dir(src_file);
+    mex_info = dir(mex_file);
 
-        if isempty(src_info)
-            error('build_mex:missingSource', 'Source file not found: %s', src_file);
-        end
-
-        needs_build = isempty(mex_info) || (src_info.datenum > mex_info.datenum);
-
-        if needs_build
-            fprintf('Building %s...\n', name);
-            mex(src_file, mex_args{:});
-            built_count = built_count + 1;
-        end
+    if isempty(src_info)
+      error('build_mex:missingSource', 'Source file not found: %s', src_file);
     end
 
-    if built_count == 0
-        fprintf('All MEX files are up to date.\n');
-    else
-        fprintf('Built %d file(s).\n', built_count);
+    needs_build = isempty(mex_info) || (src_info.datenum > mex_info.datenum);
+
+    if needs_build
+      fprintf('Building %s...\n', name);
+      mex(src_file, mex_args{:});
+      built_count = built_count + 1;
     end
+  end
+
+  if built_count == 0
+    fprintf('All MEX files are up to date.\n');
+  else
+    fprintf('Built %d file(s).\n', built_count);
+  end
 end
 
 end  % function

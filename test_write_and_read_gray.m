@@ -32,7 +32,7 @@ assert(writer.frame_rate == frame_rate, 'Writer frame_rate mismatch');
 assert(writer.frames_written == 0, 'Writer frames_written should start at 0');
 
 for i = 1:frame_count
-    writer.write(original_frames(:,:,i));
+  writer.write(original_frames(:,:,i));
 end
 
 % Check writer state after writing
@@ -77,14 +77,14 @@ clear reader;
 % Compute SSIM for each frame
 ssim_values = zeros(frame_count, 1);
 for i = 1:frame_count
-    ssim_values(i) = ssim(readback_frames(:,:,i), original_frames(:,:,i));
+  ssim_values(i) = ssim(readback_frames(:,:,i), original_frames(:,:,i));
 end
 
 min_ssim_actual = min(ssim_values);
 
 % Check SSIM threshold
 if min_ssim_actual < min_ssim
-    error('test_write_and_read_gray:ssim', 'SSIM too low: minimum %.4f < threshold %.4f', min_ssim_actual, min_ssim);
+  error('test_write_and_read_gray:ssim', 'SSIM too low: minimum %.4f < threshold %.4f', min_ssim_actual, min_ssim);
 end
 
 % Test second file with different parameters
@@ -96,7 +96,7 @@ frame_count2 = 10;
 
 writer2 = H265Writer(output_file2, width2, height2, frame_rate2, 'is_gray', true);
 for i = 1:frame_count2
-    writer2.write(uint8(randi([0 255], height2, width2)));
+  writer2.write(uint8(randi([0 255], height2, width2)));
 end
 clear writer2;
 

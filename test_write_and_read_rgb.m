@@ -32,7 +32,7 @@ assert(writer.frame_rate == frame_rate, 'Writer frame_rate mismatch');
 assert(writer.frames_written == 0, 'Writer frames_written should start at 0');
 
 for i = 1:frame_count
-    writer.write(original_frames(:,:,:,i));
+  writer.write(original_frames(:,:,:,i));
 end
 
 % Check writer state after writing
@@ -79,17 +79,17 @@ clear reader;
 % Compute SSIM for each frame (average across channels)
 ssim_values = zeros(frame_count, 1);
 for i = 1:frame_count
-    ssim_r = ssim(readback_frames(:,:,1,i), original_frames(:,:,1,i));
-    ssim_g = ssim(readback_frames(:,:,2,i), original_frames(:,:,2,i));
-    ssim_b = ssim(readback_frames(:,:,3,i), original_frames(:,:,3,i));
-    ssim_values(i) = (ssim_r + ssim_g + ssim_b) / 3;
+  ssim_r = ssim(readback_frames(:,:,1,i), original_frames(:,:,1,i));
+  ssim_g = ssim(readback_frames(:,:,2,i), original_frames(:,:,2,i));
+  ssim_b = ssim(readback_frames(:,:,3,i), original_frames(:,:,3,i));
+  ssim_values(i) = (ssim_r + ssim_g + ssim_b) / 3;
 end
 
 min_ssim_actual = min(ssim_values);
 
 % Check SSIM threshold
 if min_ssim_actual < min_ssim
-    error('test_write_and_read_rgb:ssim', 'SSIM too low: minimum %.4f < threshold %.4f', min_ssim_actual, min_ssim);
+  error('test_write_and_read_rgb:ssim', 'SSIM too low: minimum %.4f < threshold %.4f', min_ssim_actual, min_ssim);
 end
 
 % Test second file with different parameters
@@ -101,7 +101,7 @@ frame_count2 = 10;
 
 writer2 = H265Writer(output_file2, width2, height2, frame_rate2);
 for i = 1:frame_count2
-    writer2.write(uint8(randi([0 255], height2, width2, 3)));
+  writer2.write(uint8(randi([0 255], height2, width2, 3)));
 end
 clear writer2;
 

@@ -15,8 +15,8 @@ header_cleanup = onCleanup(@() fclose(header.fid));
 
 % Verify we have enough frames
 if header.nframes < num_frames
-    warning('File only has %d frames, extracting all of them.', header.nframes);
-    num_frames = header.nframes;
+  warning('File only has %d frames, extracting all of them.', header.nframes);
+  num_frames = header.nframes;
 end
 
 % Calculate frame rate from timestamps of frames being extracted
@@ -32,16 +32,16 @@ open(vw);
 % Extract and write frames
 fprintf('Extracting %d frames from %s to %s...\n', num_frames, input_file, output_file);
 for i = 1:num_frames
-    % Read frame from UFMF
-    [im, ~, ~, ~, ~] = ufmf_read_frame(header, i);
+  % Read frame from UFMF
+  [im, ~, ~, ~, ~] = ufmf_read_frame(header, i);
 
-    % Write frame to AVI
-    writeVideo(vw, im);
+  % Write frame to AVI
+  writeVideo(vw, im);
 
-    % Progress update every 1000 frames
-    if mod(i, 1000) == 0
-        fprintf('  Processed %d/%d frames\n', i, num_frames);
-    end
+  % Progress update every 1000 frames
+  if mod(i, 1000) == 0
+    fprintf('  Processed %d/%d frames\n', i, num_frames);
+  end
 end
 
 % Cleanup: vw closes automatically, header_cleanup closes file
