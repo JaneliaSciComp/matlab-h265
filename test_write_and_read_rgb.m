@@ -74,6 +74,19 @@ assert(isequal(first_frame, readback_frames(:,:,:,1)), 'Single read of first fra
 assert(isequal(middle_frame, readback_frames(:,:,:,middle_idx)), 'Single read of middle frame does not match batch read');
 assert(isequal(last_frame, readback_frames(:,:,:,frame_count)), 'Single read of last frame does not match batch read');
 
+% Test 100 random single-frame reads
+random_frame_count = 100;
+random_indices = randi(frame_count, random_frame_count, 1);
+for i = 1:random_frame_count
+  frame_index = random_indices(i);
+  random_frame = reader.read(frame_index);
+  expected_frame = readback_frames(:,:,:,frame_index);
+  if ~isequal(random_frame, expected_frame)
+    error('test_write_and_read_rgb:randomRead', ...
+          'Random single read of frame %d does not match batch read', frame_index);
+  end
+end
+
 clear reader;
 
 % Compute SSIM for each frame (average across channels)
