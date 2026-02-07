@@ -14,12 +14,18 @@ modpath();  % Sets up Matlab path
 ```
 
 ### Building MEX Files
-```bash
-cd +h265
-make              # Build out-of-date MEX files
-make clean        # Delete all MEX files
-make rebuild      # Clean and rebuild all
+From MATLAB:
+```matlab
+h265.build()          % Build out-of-date MEX files
+h265.build('clean')   % Delete all MEX files
+h265.build('rebuild') % Clean and rebuild all
 ```
+
+Or from the command line:
+```bash
+cd +h265 && make
+```
+
 Requires FFmpeg development libraries: libavformat, libavcodec, libavutil, libswscale.
 
 ### Running Tests
