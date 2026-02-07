@@ -373,19 +373,13 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     avformat_seek_file(fmt_ctx, video_stream_idx, INT64_MIN, 0, 0, 0);
     avcodec_flush_buffers(codec_ctx);
 
-    /* Detect grayscale: first check metadata, then pixel format */
-    int is_grayscale = -1;  /* -1 means not specified */
-    AVDictionaryEntry *tag = av_dict_get(fmt_ctx->metadata, "is_grayscale", NULL, 0);
-    if (tag && tag->value) {
-        is_grayscale = (strcmp(tag->value, "1") == 0) ? 1 : 0;
-    } else {
-        /* Auto-detect from pixel format */
-        enum AVPixelFormat pix_fmt = codec_ctx->pix_fmt;
-        if (pix_fmt == AV_PIX_FMT_GRAY8 || pix_fmt == AV_PIX_FMT_GRAY10LE ||
-            pix_fmt == AV_PIX_FMT_GRAY12LE || pix_fmt == AV_PIX_FMT_GRAY16LE ||
-            pix_fmt == AV_PIX_FMT_GRAY16BE) {
-            is_grayscale = 1;
-        }
+    /* Detect grayscale from pixel format */
+    int is_grayscale = -1;  /* -1 means not specified (will be treated as color) */
+    enum AVPixelFormat pix_fmt = codec_ctx->pix_fmt;
+    if (pix_fmt == AV_PIX_FMT_GRAY8 || pix_fmt == AV_PIX_FMT_GRAY10LE ||
+        pix_fmt == AV_PIX_FMT_GRAY12LE || pix_fmt == AV_PIX_FMT_GRAY16LE ||
+        pix_fmt == AV_PIX_FMT_GRAY16BE) {
+        is_grayscale = 1;
     }
 
     /* Allocate empty GOP frame cache (will be populated on first read) */

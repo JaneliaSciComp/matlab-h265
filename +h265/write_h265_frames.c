@@ -205,19 +205,14 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
             sws_scale(sws_ctx, (const uint8_t * const*)src_data, src_linesize,
                       0, height, frame->data, frame->linesize);
         } else {
-            /* Grayscale mode: convert from MATLAB column-major to row-major GRAY8, then to YUV420P */
-            /* Convert from MATLAB column-major to row-major */
+            /* Grayscale mode: convert from MATLAB column-major to row-major GRAY8 */
+            /* Copy directly to frame buffer, handling linesize padding */
             for (int y = 0; y < height; y++) {
+                uint8_t *dst_row = frame->data[0] + y * frame->linesize[0];
                 for (int x = 0; x < width; x++) {
-                    conv_buffer[y * width + x] = frame_data[x * height + y];
+                    dst_row[x] = frame_data[x * height + y];
                 }
             }
-
-            /* Convert GRAY8 to YUV420P using swscale */
-            uint8_t *src_data[1] = {conv_buffer};
-            int src_linesize[1] = {width};
-            sws_scale(sws_ctx, (const uint8_t * const*)src_data, src_linesize,
-                      0, height, frame->data, frame->linesize);
         }
 
         /* Set PTS and increment for next frame */

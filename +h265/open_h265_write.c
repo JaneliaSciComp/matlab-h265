@@ -183,7 +183,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     codec_ctx->height = height;
     codec_ctx->time_base = (AVRational){frame_rate_den, frame_rate_num};
     codec_ctx->framerate = (AVRational){frame_rate_num, frame_rate_den};
-    codec_ctx->pix_fmt = AV_PIX_FMT_YUV420P;  /* Always use YUV420P for compatibility */
+    codec_ctx->pix_fmt = is_color ? AV_PIX_FMT_YUV420P : AV_PIX_FMT_GRAY8;
     codec_ctx->gop_size = gop_size;
 
     /* Set x265 params for closed GOP, quality, and suppress info messages */
@@ -238,14 +238,8 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         }
     }
 
-    /* Set grayscale metadata */
-    av_dict_set(&fmt_ctx->metadata, "is_grayscale", is_color ? "0" : "1", 0);
-
-    /* Write file header with use_metadata_tags to preserve custom metadata */
-    AVDictionary *options = NULL;
-    av_dict_set(&options, "movflags", "use_metadata_tags", 0);
-    ret = avformat_write_header(fmt_ctx, &options);
-    av_dict_free(&options);
+    /* Write file header */
+    ret = avformat_write_header(fmt_ctx, NULL);
     if (ret < 0) {
         avio_closep(&fmt_ctx->pb);
         avcodec_free_context(&codec_ctx);
@@ -281,20 +275,22 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
             "Could not allocate frame buffer");
     }
 
-    /* Create swscale context for input->YUV420P conversion */
-    enum AVPixelFormat src_fmt = is_color ? AV_PIX_FMT_RGB24 : AV_PIX_FMT_GRAY8;
-    sws_ctx = sws_getContext(width, height, src_fmt,
-                             width, height, AV_PIX_FMT_YUV420P,
-                             SWS_BILINEAR, NULL, NULL, NULL);
-    if (!sws_ctx) {
-        av_frame_free(&frame);
-        avio_closep(&fmt_ctx->pb);
-        avcodec_free_context(&codec_ctx);
-        avformat_free_context(fmt_ctx);
-        mxFree(filename);
-        mexErrMsgIdAndTxt("open_h265_write:swsContext",
-            "Could not create swscale context");
+    /* Create swscale context for RGB->YUV420P conversion (only needed for color) */
+    if (is_color) {
+        sws_ctx = sws_getContext(width, height, AV_PIX_FMT_RGB24,
+                                 width, height, AV_PIX_FMT_YUV420P,
+                                 SWS_BILINEAR, NULL, NULL, NULL);
+        if (!sws_ctx) {
+            av_frame_free(&frame);
+            avio_closep(&fmt_ctx->pb);
+            avcodec_free_context(&codec_ctx);
+            avformat_free_context(fmt_ctx);
+            mxFree(filename);
+            mexErrMsgIdAndTxt("open_h265_write:swsContext",
+                "Could not create swscale context");
+        }
     }
+    /* For grayscale, sws_ctx remains NULL - we copy directly to GRAY8 frame */
 
     /* Allocate mutable state struct */
     state = (WriterState *)mxMalloc(sizeof(WriterState));
