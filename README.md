@@ -15,7 +15,7 @@ designed for machine vision applications.
 
 2. Add the repository root to your MATLAB path:
    ```matlab
-   addpath('/path/to/h265');
+   addpath('/path/to/matlab-h265');
    modpath();
    ```
    

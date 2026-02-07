@@ -84,3 +84,5 @@ MEX functions pass FFmpeg context pointers between calls via a MATLAB struct.
 - Variable that are the count of something should end in `_count`, with a singular stem.  E.g.  `frame_count` instead of `num_frames` or `frames_count`.
 - When running `matlab -batch <command>`, there's no need to add the `-nodisplay` option, as it is implied by `-batch`
 - When running `matlab -batch <command>`, the <command> cannot contain newlines.  To do something longer, write a .m file and call it in <command>.
+- When calling zero-argument functions, include the parentheses for clarity.  E.g. `foo = tempname();`, not `foo = tempname;`
+- When a variable holds a file name, the name should end in `_file_name`, not `_file`, for clarity.
