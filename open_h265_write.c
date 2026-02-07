@@ -26,7 +26,35 @@
 #include <libavutil/imgutils.h>
 #include <libavutil/log.h>
 #include <stdint.h>
+#include <stdarg.h>
 #include <string.h>
+
+/*
+ * Dynamically allocate and format a string using mxMalloc.
+ * Returns a string that will be auto-freed when the MEX function returns.
+ */
+static char *mx_sprintf(const char *format, ...)
+{
+    va_list args;
+
+    /* First pass: determine required size */
+    va_start(args, format);
+    int len = vsnprintf(NULL, 0, format, args);
+    va_end(args);
+
+    if (len < 0) return NULL;
+
+    /* Allocate buffer */
+    char *buf = mxMalloc(len + 1);
+    if (!buf) return NULL;
+
+    /* Second pass: format the string */
+    va_start(args, format);
+    vsnprintf(buf, len + 1, format, args);
+    va_end(args);
+
+    return buf;
+}
 
 /* Mutable state that can be updated by write_ffmpeg_frame */
 typedef struct {
@@ -159,8 +187,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     codec_ctx->gop_size = gop_size;
 
     /* Set x265 params for closed GOP, quality, and suppress info messages */
-    char x265_params[256];
-    snprintf(x265_params, sizeof(x265_params), "log-level=error:no-open-gop=1:keyint=%d:crf=%d", gop_size, crf);
+    char *x265_params = mx_sprintf("log-level=error:no-open-gop=1:keyint=%d:crf=%d", gop_size, crf);
     ret = av_opt_set(codec_ctx->priv_data, "x265-params", x265_params, 0);
     if (ret < 0) {
         avcodec_free_context(&codec_ctx);
