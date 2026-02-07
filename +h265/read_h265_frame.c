@@ -9,8 +9,12 @@
  * Usage: frame = read_h265_frame(video_info, frame_index)
  *   video_info  - struct returned by open_h265_video
  *   frame_index - 1-based frame index
- *   frame       - grayscale (height x width) or RGB (height x width x 3) uint8
- *                 Output format depends on is_gray field in video_info.
+ *   frame       - grayscale (width x height) or RGB (3 x width x height) uint8
+ *                 Output is row-major; caller should use permute().
+ *
+ * NOTE: Output is in row-major order for performance. Caller should use:
+ *   permute(frame, [2 1])       for grayscale -> (height x width)
+ *   permute(frame, [3 2 1])     for RGB -> (height x width x 3)
  *
  * Compile with:
  *   mex read_h265_frame.c -lavformat -lavcodec -lavutil -lswscale
@@ -159,8 +163,8 @@ static int decode_gop_to_cache(
                           state->frame->linesize, 0, state->height,
                           state->out_frame->data, state->out_frame->linesize);
 
-                convert_frame_to_matlab(state->out_frame, state->width,
-                                        state->height, state->is_grayscale, temp_frame);
+                copy_frame_rowmajor(state->out_frame, state->width,
+                                    state->height, state->is_grayscale, temp_frame);
 
                 /* Release decoder's internal buffer reference */
                 av_frame_unref(state->frame);
@@ -196,8 +200,8 @@ static int decode_gop_to_cache(
                       state->frame->linesize, 0, state->height,
                       state->out_frame->data, state->out_frame->linesize);
 
-            convert_frame_to_matlab(state->out_frame, state->width,
-                                    state->height, state->is_grayscale, temp_frame);
+            copy_frame_rowmajor(state->out_frame, state->width,
+                                state->height, state->is_grayscale, temp_frame);
 
             /* Release decoder's internal buffer reference */
             av_frame_unref(state->frame);
@@ -303,11 +307,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     if (cache_initialized) {
         int cache_idx = find_in_cache(cache, target_frame);
         if (cache_idx >= 0) {
-            /* Cache hit */
+            /* Cache hit - return row-major data (caller will permute) */
             if (is_grayscale) {
-                plhs[0] = mxCreateNumericMatrix(height, width, mxUINT8_CLASS, mxREAL);
+                plhs[0] = mxCreateNumericMatrix(width, height, mxUINT8_CLASS, mxREAL);
             } else {
-                mwSize dims[3] = {height, width, 3};
+                mwSize dims[3] = {3, width, height};
                 plhs[0] = mxCreateNumericArray(3, dims, mxUINT8_CLASS, mxREAL);
             }
             memcpy(mxGetData(plhs[0]), get_cache_frame(cache, cache_idx), cache->frame_size);
@@ -341,13 +345,13 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         mexErrMsgIdAndTxt("read_h265_frame:decode", "Error decoding GOP");
     }
 
-    /* Return frame from cache */
+    /* Return frame from cache - row-major data (caller will permute) */
     int cache_idx = find_in_cache(cache, target_frame);
     if (cache_idx >= 0) {
         if (is_grayscale) {
-            plhs[0] = mxCreateNumericMatrix(height, width, mxUINT8_CLASS, mxREAL);
+            plhs[0] = mxCreateNumericMatrix(width, height, mxUINT8_CLASS, mxREAL);
         } else {
-            mwSize dims[3] = {height, width, 3};
+            mwSize dims[3] = {3, width, height};
             plhs[0] = mxCreateNumericArray(3, dims, mxUINT8_CLASS, mxREAL);
         }
         memcpy(mxGetData(plhs[0]), get_cache_frame(cache, cache_idx), cache->frame_size);

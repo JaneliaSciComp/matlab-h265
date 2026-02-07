@@ -44,6 +44,8 @@ TARGETS := \
     open_h265_video.$(MEXEXT) \
     read_h265_frame.$(MEXEXT) \
     read_h265_frames.$(MEXEXT) \
+    read_h265_frames_profile.$(MEXEXT) \
+    read_h265_frames_rowmajor.$(MEXEXT) \
     close_h265_video.$(MEXEXT) \
     open_h265_write.$(MEXEXT) \
     write_h265_frames.$(MEXEXT) \
@@ -67,6 +69,12 @@ read_h265_frame.$(MEXEXT): read_h265_frame.c $(CACHE_HDR) $(DECODE_HDR) $(DECODE
 
 read_h265_frames.$(MEXEXT): read_h265_frames.c $(DECODE_HDR) $(DECODE_SRC)
 	$(MEX) $< $(DECODE_SRC) $(LIBS_SCALE)
+
+read_h265_frames_profile.$(MEXEXT): read_h265_frames_profile.c
+	$(MEX) $< $(LIBS_SCALE)
+
+read_h265_frames_rowmajor.$(MEXEXT): read_h265_frames_rowmajor.c
+	$(MEX) $< $(LIBS_SCALE)
 
 close_h265_video.$(MEXEXT): close_h265_video.c $(CACHE_HDR)
 	$(MEX) $< $(LIBS_BASE)

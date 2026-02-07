@@ -7,8 +7,12 @@
  *   video_info  - struct returned by open_h265_video
  *   start_frame - 1-based starting frame index
  *   end_frame   - 1-based ending frame index (inclusive)
- *   frames      - grayscale: uint8 3D array (height x width x num_frames)
- *                 RGB: uint8 4D array (height x width x 3 x num_frames)
+ *   frames      - grayscale: uint8 3D array (width x height x num_frames)
+ *                 RGB: uint8 4D array (3 x width x height x num_frames)
+ *
+ * NOTE: Output is in row-major order for performance. Caller should use:
+ *   permute(frames, [2 1 3])     for grayscale -> (height x width x num_frames)
+ *   permute(frames, [3 2 1 4])   for RGB -> (height x width x 3 x num_frames)
  *
  * Compile with:
  *   mex read_h265_frames.c -lavformat -lavcodec -lavutil -lswscale
@@ -113,15 +117,17 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
                         codec_ctx->pix_fmt == AV_PIX_FMT_GRAY16LE);
     }
 
-    /* Create output array */
+    /* Create output array with swapped dimensions for row-major storage */
     uint8_t *out_data;
     size_t frame_size;
     if (is_grayscale) {
-        mwSize dims[3] = {height, width, num_frames_to_read};
+        /* width x height x frames (caller permutes to height x width x frames) */
+        mwSize dims[3] = {width, height, num_frames_to_read};
         plhs[0] = mxCreateNumericArray(3, dims, mxUINT8_CLASS, mxREAL);
         frame_size = (size_t)height * width;
     } else {
-        mwSize dims[4] = {height, width, 3, num_frames_to_read};
+        /* 3 x width x height x frames (caller permutes to height x width x 3 x frames) */
+        mwSize dims[4] = {3, width, height, num_frames_to_read};
         plhs[0] = mxCreateNumericArray(4, dims, mxUINT8_CLASS, mxREAL);
         frame_size = (size_t)height * width * 3;
     }
@@ -133,8 +139,8 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         mexErrMsgIdAndTxt("read_h265_frames:allocDecode", "Could not initialize decoder");
     }
 
-    /* Decode frames directly into output buffer */
-    int frames_captured = decode_frame_range(
+    /* Decode frames in row-major order (fast memcpy, caller does permute) */
+    int frames_captured = decode_frame_range_rowmajor(
         fmt_ctx, codec_ctx, video_stream_idx,
         dts_array, pts_increment,
         start_frame, end_frame,

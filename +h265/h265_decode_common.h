@@ -41,9 +41,19 @@ typedef struct {
 /*
  * Convert an FFmpeg frame to MATLAB column-major format.
  * Handles both grayscale and RGB output.
+ * NOTE: This is slow due to strided memory access.
  */
 void convert_frame_to_matlab(AVFrame *out_frame, int width, int height,
                              int is_grayscale, uint8_t *out_data);
+
+/*
+ * Copy an FFmpeg frame in row-major order (fast sequential memcpy).
+ * Caller should use MATLAB permute() to convert to column-major.
+ * For grayscale: output is width x height (use permute([2 1]))
+ * For RGB: output is stored as height rows of width*3 bytes
+ */
+void copy_frame_rowmajor(AVFrame *out_frame, int width, int height,
+                         int is_grayscale, uint8_t *out_data);
 
 /*
  * Initialize decode state. Returns 1 on success, 0 on failure.
@@ -72,6 +82,18 @@ void free_decode_state(H265DecodeState *state);
  * Returns: number of frames captured, or -1 on error
  */
 int decode_frame_range(
+    AVFormatContext *fmt_ctx, AVCodecContext *codec_ctx, int video_stream_idx,
+    int64_t *dts_array, int64_t pts_increment,
+    int target_start, int target_end,
+    H265DecodeState *state,
+    uint8_t *frame_buffer, size_t frame_size);
+
+/*
+ * Decode frames in [target_start, target_end] into frame_buffer using row-major copy.
+ * Same as decode_frame_range but uses fast row-major copy instead of column-major transpose.
+ * Caller must use MATLAB permute() on the result.
+ */
+int decode_frame_range_rowmajor(
     AVFormatContext *fmt_ctx, AVCodecContext *codec_ctx, int video_stream_idx,
     int64_t *dts_array, int64_t pts_increment,
     int target_start, int target_end,
