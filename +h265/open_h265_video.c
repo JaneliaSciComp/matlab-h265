@@ -82,7 +82,7 @@ static int check_hevc_packet_for_open_gop(const uint8_t *data, int size, int len
 }
 
 /*
- * Allocate an empty frame cache. Frame data block will be allocated on first read.
+ * Allocate an empty frame cache. Frame data will be allocated on first read.
  * Uses mxMalloc + mexMakeMemoryPersistent for proper MEX memory management.
  */
 static H265FrameCache *alloc_frame_cache(void)
@@ -91,23 +91,11 @@ static H265FrameCache *alloc_frame_cache(void)
     if (!cache) return NULL;
     mexMakeMemoryPersistent(cache);
 
-    /* Allocate handles */
-    cache->frame_data = (uint8_t **)mxMalloc(sizeof(uint8_t *));
-    cache->frame_indices = (int **)mxMalloc(sizeof(int *));
-
-    if (!cache->frame_data || !cache->frame_indices) {
-        if (cache->frame_data) mxFree(cache->frame_data);
-        if (cache->frame_indices) mxFree(cache->frame_indices);
-        mxFree(cache);
-        return NULL;
-    }
-    mexMakeMemoryPersistent(cache->frame_data);
-    mexMakeMemoryPersistent(cache->frame_indices);
-
-    *cache->frame_data = NULL;     /* Allocated on first read */
-    *cache->frame_indices = NULL;  /* Allocated on first read */
+    cache->frames = NULL;          /* mxArray allocated on first read */
+    cache->frame_indices = NULL;   /* Allocated on first read */
     cache->num_frames = 0;
     cache->capacity = 0;
+    cache->start_frame = -1;
     cache->width = 0;
     cache->height = 0;
     cache->is_grayscale = 0;

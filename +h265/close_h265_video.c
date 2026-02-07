@@ -20,23 +20,16 @@
 #include "h265_frame_cache.h"
 
 /*
- * Free frame cache memory allocated with mxMalloc/mxRealloc.
+ * Free frame cache memory.
  */
 static void free_frame_cache(H265FrameCache *cache)
 {
     if (!cache) return;
 
-    /* Free data through handles */
-    if (cache->frame_data) {
-        if (*cache->frame_data) {
-            mxFree(*cache->frame_data);
-        }
-        mxFree(cache->frame_data);
+    if (cache->frames) {
+        mxDestroyArray(cache->frames);
     }
     if (cache->frame_indices) {
-        if (*cache->frame_indices) {
-            mxFree(*cache->frame_indices);
-        }
         mxFree(cache->frame_indices);
     }
     mxFree(cache);

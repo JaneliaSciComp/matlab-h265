@@ -6,8 +6,9 @@
  * Optimization: Uses GOP frame cache stored in video_info. Subsequent requests
  * for frames in the same GOP are served from cache without re-decoding.
  *
- * Uses row-major decoding internally for cache efficiency, then calls
- * MATLAB's permute/transpose to return properly oriented column-major data.
+ * The cache stores frames in a MATLAB array (column-major). When decoding a GOP,
+ * frames are decoded into a row-major buffer, then permuted all at once using
+ * MATLAB's optimized permute function.
  *
  * Usage: frame = read_h265_frame(video_info, frame_index)
  *   video_info  - struct returned by open_h265_video
@@ -15,7 +16,7 @@
  *   frame       - grayscale (height x width) or RGB (height x width x 3) uint8
  *
  * Compile with:
- *   mex read_h265_frame.c -lavformat -lavcodec -lavutil -lswscale
+ *   mex read_h265_frame.c h265_decode_common.c -lavformat -lavcodec -lavutil -lswscale
  */
 
 #include "mex.h"
@@ -32,110 +33,48 @@
 
 static int find_in_cache(H265FrameCache *cache, int frame_index)
 {
-    if (!cache || cache->num_frames == 0) return -1;
-    int *indices = *cache->frame_indices;
+    if (!cache || cache->num_frames == 0 || !cache->frame_indices) return -1;
     for (int i = 0; i < cache->num_frames; i++) {
-        if (indices[i] == frame_index) {
+        if (cache->frame_indices[i] == frame_index) {
             return i;
         }
     }
     return -1;
 }
 
-static uint8_t *get_cache_frame(H265FrameCache *cache, int cache_idx)
-{
-    return *cache->frame_data + cache_idx * cache->frame_size;
-}
-
-static void add_to_cache(H265FrameCache *cache, int frame_index, const uint8_t *frame_data)
-{
-    if (!cache || cache->num_frames >= cache->capacity) return;
-
-    int idx = cache->num_frames;
-    memcpy(get_cache_frame(cache, idx), frame_data, cache->frame_size);
-    (*cache->frame_indices)[idx] = frame_index;
-    cache->num_frames++;
-}
-
 static void clear_cache(H265FrameCache *cache)
 {
-    if (cache) {
-        cache->num_frames = 0;
+    if (!cache) return;
+    if (cache->frames) {
+        mxDestroyArray(cache->frames);
+        cache->frames = NULL;
     }
+    cache->num_frames = 0;
+    cache->start_frame = -1;
 }
 
-static int ensure_cache_capacity(H265FrameCache *cache, int new_capacity)
+static int ensure_indices_capacity(H265FrameCache *cache, int new_capacity)
 {
-    if (!cache || new_capacity <= cache->capacity) return 1;
+    if (new_capacity <= cache->capacity) return 1;
 
-    uint8_t *new_data = (uint8_t *)mxRealloc(*cache->frame_data,
-                                              new_capacity * cache->frame_size);
-    int *new_indices = (int *)mxRealloc(*cache->frame_indices,
+    int *new_indices = (int *)mxRealloc(cache->frame_indices,
                                          new_capacity * sizeof(int));
+    if (!new_indices) return 0;
 
-    if (!new_data || !new_indices) {
-        if (new_data && new_data != *cache->frame_data) mxFree(new_data);
-        if (new_indices && new_indices != *cache->frame_indices) mxFree(new_indices);
-        return 0;
-    }
-
-    mexMakeMemoryPersistent(new_data);
     mexMakeMemoryPersistent(new_indices);
-    *cache->frame_data = new_data;
-    *cache->frame_indices = new_indices;
+    cache->frame_indices = new_indices;
     cache->capacity = new_capacity;
     return 1;
 }
 
-static void init_cache_format(H265FrameCache *cache, int width, int height, int is_grayscale)
-{
-    if (!cache) return;
-    cache->num_frames = 0;
-    cache->width = width;
-    cache->height = height;
-    cache->is_grayscale = is_grayscale;
-    cache->frame_size = is_grayscale ? (size_t)width * height : (size_t)width * height * 3;
-}
-
-/*
- * Create output array from cached row-major data and permute to column-major.
- */
-static mxArray *create_output_from_cache(H265FrameCache *cache, int cache_idx,
-                                          int width, int height, int is_grayscale)
-{
-    mxArray *rowmajor;
-    if (is_grayscale) {
-        rowmajor = mxCreateNumericMatrix(width, height, mxUINT8_CLASS, mxREAL);
-    } else {
-        mwSize dims[3] = {3, width, height};
-        rowmajor = mxCreateNumericArray(3, dims, mxUINT8_CLASS, mxREAL);
-    }
-    memcpy(mxGetData(rowmajor), get_cache_frame(cache, cache_idx), cache->frame_size);
-
-    /* Call MATLAB to permute/transpose */
-    mxArray *result;
-    if (is_grayscale) {
-        /* Use transpose (.') for 2D - equivalent to permute([2 1]) */
-        mexCallMATLAB(1, &result, 1, &rowmajor, "transpose");
-    } else {
-        /* permute([3 2 1]) for RGB */
-        mxArray *perm_args[2];
-        perm_args[0] = rowmajor;
-        perm_args[1] = mxCreateDoubleMatrix(1, 3, mxREAL);
-        double *perm = mxGetPr(perm_args[1]);
-        perm[0] = 3; perm[1] = 2; perm[2] = 1;
-        mexCallMATLAB(1, &result, 2, perm_args, "permute");
-        mxDestroyArray(perm_args[1]);
-    }
-
-    mxDestroyArray(rowmajor);
-    return result;
-}
-
 /* ============================================================================
- * GOP Decoding - decodes entire GOP containing target frame into cache
+ * GOP Decoding - decodes entire GOP and stores as transposed mxArray
  * ============================================================================ */
 
+/*
+ * Decode GOP into cache. Frames are decoded in row-major order into a temporary
+ * buffer, then permuted all at once and stored in the cache as column-major.
+ */
 static int decode_gop_to_cache(
     AVFormatContext *fmt_ctx, AVCodecContext *codec_ctx, int video_stream_idx,
     int64_t *dts_array, int64_t pts_increment, int target_frame,
@@ -145,9 +84,19 @@ static int decode_gop_to_cache(
     int found_target = 0;
     int first_keyframe_seen = 0;
 
-    /* Temporary buffer for frame conversion */
-    uint8_t *temp_frame = (uint8_t *)mxMalloc(cache->frame_size);
-    if (!temp_frame) return -1;
+    /* Temporary storage for frame indices during decode */
+    int temp_capacity = 64;
+    int temp_count = 0;
+    int *temp_indices = (int *)mxMalloc(temp_capacity * sizeof(int));
+    if (!temp_indices) return -1;
+
+    /* Temporary row-major buffer - will grow as needed */
+    size_t buffer_capacity = temp_capacity * cache->frame_size;
+    uint8_t *temp_buffer = (uint8_t *)mxMalloc(buffer_capacity);
+    if (!temp_buffer) {
+        mxFree(temp_indices);
+        return -1;
+    }
 
     /* Seek to target position */
     ret = av_seek_frame(fmt_ctx, video_stream_idx, dts_array[target_frame], AVSEEK_FLAG_BACKWARD);
@@ -168,8 +117,8 @@ static int decode_gop_to_cache(
                         av_packet_unref(state->pkt);
                         break;
                     }
-                    /* Haven't found target - clear cache for new GOP */
-                    clear_cache(cache);
+                    /* Haven't found target - reset for new GOP */
+                    temp_count = 0;
                 }
                 first_keyframe_seen = 1;
             }
@@ -184,41 +133,54 @@ static int decode_gop_to_cache(
                 ret = avcodec_receive_frame(codec_ctx, state->frame);
                 if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) break;
                 if (ret < 0) {
-                    mxFree(temp_frame);
+                    mxFree(temp_buffer);
+                    mxFree(temp_indices);
                     return -1;
                 }
 
                 int frame_idx = (int)(state->frame->pts / pts_increment);
 
-                /* Convert and add to cache */
+                /* Grow buffers if needed */
+                if (temp_count >= temp_capacity) {
+                    temp_capacity *= 2;
+                    int *new_indices = (int *)mxRealloc(temp_indices, temp_capacity * sizeof(int));
+                    uint8_t *new_buffer = (uint8_t *)mxRealloc(temp_buffer, temp_capacity * cache->frame_size);
+                    if (!new_indices || !new_buffer) {
+                        if (new_indices) mxFree(new_indices);
+                        if (new_buffer) mxFree(new_buffer);
+                        mxFree(temp_buffer);
+                        mxFree(temp_indices);
+                        return -1;
+                    }
+                    temp_indices = new_indices;
+                    temp_buffer = new_buffer;
+                }
+
+                /* Color convert */
                 sws_scale(state->sws_ctx,
                           (const uint8_t * const*)state->frame->data,
                           state->frame->linesize, 0, state->height,
                           state->out_frame->data, state->out_frame->linesize);
 
+                /* Copy frame in row-major order */
                 copy_frame_rowmajor(state->out_frame, state->width,
-                                    state->height, state->is_grayscale, temp_frame);
+                                    state->height, state->is_grayscale,
+                                    temp_buffer + temp_count * cache->frame_size);
 
-                /* Release decoder's internal buffer reference */
-                av_frame_unref(state->frame);
-
-                if (cache->num_frames >= cache->capacity) {
-                    if (!ensure_cache_capacity(cache, cache->capacity * 2)) {
-                        mxFree(temp_frame);
-                        return -1;
-                    }
-                }
-                add_to_cache(cache, frame_idx, temp_frame);
+                temp_indices[temp_count] = frame_idx;
+                temp_count++;
 
                 if (frame_idx == target_frame) {
                     found_target = 1;
                 }
+
+                av_frame_unref(state->frame);
             }
         }
         av_packet_unref(state->pkt);
     }
 
-    /* Flush decoder to get any remaining buffered frames */
+    /* Flush decoder */
     if (!found_target) {
         avcodec_send_packet(codec_ctx, NULL);
         while (1) {
@@ -228,33 +190,86 @@ static int decode_gop_to_cache(
 
             int frame_idx = (int)(state->frame->pts / pts_increment);
 
+            if (temp_count >= temp_capacity) {
+                temp_capacity *= 2;
+                temp_indices = (int *)mxRealloc(temp_indices, temp_capacity * sizeof(int));
+                temp_buffer = (uint8_t *)mxRealloc(temp_buffer, temp_capacity * cache->frame_size);
+            }
+
             sws_scale(state->sws_ctx,
                       (const uint8_t * const*)state->frame->data,
                       state->frame->linesize, 0, state->height,
                       state->out_frame->data, state->out_frame->linesize);
 
             copy_frame_rowmajor(state->out_frame, state->width,
-                                state->height, state->is_grayscale, temp_frame);
+                                state->height, state->is_grayscale,
+                                temp_buffer + temp_count * cache->frame_size);
 
-            /* Release decoder's internal buffer reference */
-            av_frame_unref(state->frame);
-
-            if (cache->num_frames >= cache->capacity) {
-                ensure_cache_capacity(cache, cache->capacity * 2);
-            }
-            add_to_cache(cache, frame_idx, temp_frame);
+            temp_indices[temp_count] = frame_idx;
+            temp_count++;
 
             if (frame_idx == target_frame) {
                 found_target = 1;
             }
+
+            av_frame_unref(state->frame);
         }
     }
 
-    /* Always flush decoder buffers to release internal frame references */
     avcodec_flush_buffers(codec_ctx);
 
-    mxFree(temp_frame);
-    return found_target ? 0 : -1;
+    if (!found_target || temp_count == 0) {
+        mxFree(temp_buffer);
+        mxFree(temp_indices);
+        return -1;
+    }
+
+    /* Create row-major mxArray from temp buffer */
+    mxArray *rowmajor;
+    if (cache->is_grayscale) {
+        mwSize dims[3] = {cache->width, cache->height, temp_count};
+        rowmajor = mxCreateNumericArray(3, dims, mxUINT8_CLASS, mxREAL);
+    } else {
+        mwSize dims[4] = {3, cache->width, cache->height, temp_count};
+        rowmajor = mxCreateNumericArray(4, dims, mxUINT8_CLASS, mxREAL);
+    }
+    memcpy(mxGetData(rowmajor), temp_buffer, temp_count * cache->frame_size);
+    mxFree(temp_buffer);
+
+    /* Permute to column-major */
+    mxArray *perm_args[2];
+    perm_args[0] = rowmajor;
+
+    if (cache->is_grayscale) {
+        perm_args[1] = mxCreateDoubleMatrix(1, 3, mxREAL);
+        double *perm = mxGetPr(perm_args[1]);
+        perm[0] = 2; perm[1] = 1; perm[2] = 3;
+    } else {
+        perm_args[1] = mxCreateDoubleMatrix(1, 4, mxREAL);
+        double *perm = mxGetPr(perm_args[1]);
+        perm[0] = 3; perm[1] = 2; perm[2] = 1; perm[3] = 4;
+    }
+
+    mxArray *permuted;
+    mexCallMATLAB(1, &permuted, 2, perm_args, "permute");
+    mxDestroyArray(rowmajor);
+    mxDestroyArray(perm_args[1]);
+
+    /* Store in cache */
+    mexMakeArrayPersistent(permuted);
+    cache->frames = permuted;
+
+    /* Store frame indices */
+    if (!ensure_indices_capacity(cache, temp_count)) {
+        mxFree(temp_indices);
+        return -1;
+    }
+    memcpy(cache->frame_indices, temp_indices, temp_count * sizeof(int));
+    cache->num_frames = temp_count;
+    cache->start_frame = temp_indices[0];
+
+    mxFree(temp_indices);
+    return 0;
 }
 
 /* ============================================================================
@@ -333,28 +348,31 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     int width = codec_ctx->width;
     int height = codec_ctx->height;
 
-    /* Check if cache is initialized */
-    int cache_initialized = (cache->width > 0 && cache->height > 0);
-
     /* Check cache for frame */
-    if (cache_initialized) {
-        int cache_idx = find_in_cache(cache, target_frame);
-        if (cache_idx >= 0) {
-            /* Cache hit - permute and return */
-            plhs[0] = create_output_from_cache(cache, cache_idx, width, height, is_grayscale);
-            return;
+    int cache_idx = find_in_cache(cache, target_frame);
+    if (cache_idx >= 0 && cache->frames) {
+        /* Cache hit - extract frame from cached mxArray */
+        size_t frame_size = cache->frame_size;
+        uint8_t *cache_data = (uint8_t *)mxGetData(cache->frames);
+
+        if (is_grayscale) {
+            plhs[0] = mxCreateNumericMatrix(height, width, mxUINT8_CLASS, mxREAL);
+        } else {
+            mwSize dims[3] = {height, width, 3};
+            plhs[0] = mxCreateNumericArray(3, dims, mxUINT8_CLASS, mxREAL);
         }
+        memcpy(mxGetData(plhs[0]), cache_data + cache_idx * frame_size, frame_size);
+        return;
     }
 
     /* Cache miss - decode GOP */
-    if (!cache_initialized) {
-        init_cache_format(cache, width, height, is_grayscale);
-        if (!ensure_cache_capacity(cache, 60)) {
-            mexErrMsgIdAndTxt("read_h265_frame:allocCache", "Could not allocate cache");
-        }
-    } else {
-        clear_cache(cache);
-    }
+    clear_cache(cache);
+
+    /* Initialize cache format if needed */
+    cache->width = width;
+    cache->height = height;
+    cache->is_grayscale = is_grayscale;
+    cache->frame_size = is_grayscale ? (size_t)width * height : (size_t)width * height * 3;
 
     /* Initialize decode state */
     H265DecodeState state;
@@ -372,10 +390,19 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         mexErrMsgIdAndTxt("read_h265_frame:decode", "Error decoding GOP");
     }
 
-    /* Return frame from cache - permute and return */
-    int cache_idx = find_in_cache(cache, target_frame);
-    if (cache_idx >= 0) {
-        plhs[0] = create_output_from_cache(cache, cache_idx, width, height, is_grayscale);
+    /* Return frame from cache */
+    cache_idx = find_in_cache(cache, target_frame);
+    if (cache_idx >= 0 && cache->frames) {
+        size_t frame_size = cache->frame_size;
+        uint8_t *cache_data = (uint8_t *)mxGetData(cache->frames);
+
+        if (is_grayscale) {
+            plhs[0] = mxCreateNumericMatrix(height, width, mxUINT8_CLASS, mxREAL);
+        } else {
+            mwSize dims[3] = {height, width, 3};
+            plhs[0] = mxCreateNumericArray(3, dims, mxUINT8_CLASS, mxREAL);
+        }
+        memcpy(mxGetData(plhs[0]), cache_data + cache_idx * frame_size, frame_size);
         return;
     }
 

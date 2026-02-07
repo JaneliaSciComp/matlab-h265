@@ -5,6 +5,9 @@
  * The cache stores decoded frames from a GOP (Group of Pictures) to avoid
  * re-decoding when reading sequential frames within the same GOP.
  *
+ * Frames are stored in a MATLAB array (column-major, already transposed)
+ * so returning a frame is just a memcpy with no per-frame transpose needed.
+ *
  * Each H265Reader instance has its own cache, stored as a pointer in the
  * video_info struct returned by open_h265_video.
  */
@@ -12,14 +15,16 @@
 #ifndef H265_FRAME_CACHE_H
 #define H265_FRAME_CACHE_H
 
+#include "mex.h"
 #include <stdint.h>
 #include <stddef.h>
 
 typedef struct {
-    uint8_t **frame_data;    /* Handle to frame data block (for reallocation) */
-    int **frame_indices;     /* Handle to frame index array (for reallocation) */
+    mxArray *frames;         /* MATLAB array holding cached frames (column-major) */
+    int *frame_indices;      /* Frame indices corresponding to cached frames */
     int num_frames;          /* Number of frames currently in cache */
-    int capacity;            /* Maximum frames that fit in allocated block */
+    int capacity;            /* Allocated capacity for frame_indices */
+    int start_frame;         /* First frame index in cache (for quick lookup) */
     int width;
     int height;
     int is_grayscale;        /* Output format: 1 for grayscale, 0 for RGB */
