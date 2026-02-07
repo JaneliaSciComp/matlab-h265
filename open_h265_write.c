@@ -270,7 +270,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
 
     /* Allocate mutable state struct */
-    state = (WriterState *)malloc(sizeof(WriterState));
+    state = (WriterState *)mxMalloc(sizeof(WriterState));
     if (!state) {
         sws_freeContext(sws_ctx);
         av_frame_free(&frame);
@@ -281,6 +281,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         mexErrMsgIdAndTxt("open_h265_write:allocState",
             "Could not allocate writer state");
     }
+    mexMakeMemoryPersistent(state);
 
     /* Compute pts_increment: time_base units per frame */
     /* pts_increment = time_base.den * frame_rate.den / (time_base.num * frame_rate.num) */

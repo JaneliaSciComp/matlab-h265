@@ -123,7 +123,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         sws_freeContext(sws_ctx);
     }
     if (state) {
-        free(state);
+        mxFree(state);
     }
     if (frame) {
         av_frame_free(&frame);
