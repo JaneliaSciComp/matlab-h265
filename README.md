@@ -57,3 +57,7 @@ h265.from_ufmf('output.mp4', 'input.ufmf');
 ## License
 
 BSD 3-Clause License. See [LICENSE](LICENSE) for details.
+
+The UFMF utility functions in `toolbox/` are taken from the
+[JAABA project](https://github.com/kristinbranson/JAABA) and carry their
+own copyright and license.
