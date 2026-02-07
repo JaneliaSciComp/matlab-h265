@@ -1,6 +1,6 @@
 /*
  * open_h265_write.c
- * MEX function to open a video file for writing H.265 with closed GOP.
+ * MEX function to open a video file for writing h.265 with closed GOP.
  *
  * Usage: writer = open_h265_write(filename, width, height, frame_rate, is_color, gop_size, crf)
  *   filename   - output file path (must end in .mp4)
@@ -149,13 +149,13 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
             "Could not allocate output format context");
     }
 
-    /* Find H.265 encoder */
+    /* Find h.265 encoder */
     codec = avcodec_find_encoder(AV_CODEC_ID_HEVC);
     if (!codec) {
         avformat_free_context(fmt_ctx);
         mxFree(filename);
         mexErrMsgIdAndTxt("open_h265_write:noCodec",
-            "Could not find H.265 encoder. Is libx265 installed?");
+            "Could not find h.265 encoder. Is libx265 installed?");
     }
 
     /* Create video stream */

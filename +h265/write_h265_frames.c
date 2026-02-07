@@ -1,6 +1,6 @@
 /*
  * write_h265_frames.c
- * MEX function to write multiple frames to an H.265 video file.
+ * MEX function to write multiple frames to an h.265 video file.
  * Supports both grayscale (3D) and RGB (4D) input based on writer mode.
  * Automatically increments PTS for each frame.
  *

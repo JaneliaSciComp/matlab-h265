@@ -1,6 +1,6 @@
 /*
  * h265_frame_cache.h
- * GOP frame cache structure for H.265 video reading.
+ * GOP frame cache structure for h.265 video reading.
  *
  * The cache stores decoded frames from a GOP (Group of Pictures) to avoid
  * re-decoding when reading sequential frames within the same GOP.

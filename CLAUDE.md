@@ -36,11 +36,11 @@ h265.test_all()        % Run all tests
 ## Architecture
 
 ### MATLAB Package (h265)
-All H.265 functionality is in the `h265` package (`+h265/` folder):
+All h.265 functionality is in the `h265` package (`+h265/` folder):
 
 **Classes (High-Level API)**
-- **h265.Reader**: Read H.265 video files. Supports single frame or batch reads. Optional `is_gray` flag for grayscale output.
-- **h265.Writer**: Write H.265 video files. Supports single frame or batch writes. Defaults to RGB; pass `is_gray=true` for grayscale.
+- **h265.Reader**: Read h.265 video files. Supports single frame or batch reads. Optional `is_gray` flag for grayscale output.
+- **h265.Writer**: Write h.265 video files. Supports single frame or batch writes. Defaults to RGB; pass `is_gray=true` for grayscale.
 
 **MEX Functions (Low-Level C API)**
 Reading: `open_h265_video.c` → `read_h265_frame.c` / `read_h265_frames.c` → `close_h265_video.c`
@@ -50,7 +50,7 @@ Writing: `open_h265_write.c` → `write_h265_frames.c` → `close_h265_write.c`
 MEX functions pass FFmpeg context pointers between calls via a MATLAB struct.
 
 ### Key Implementation Details
-- H.265 encoding uses YUV420P pixel format with CRF 18 quality
+- h.265 encoding uses YUV420P pixel format with CRF 18 quality
 - Closed GOP with keyframe interval of 50 frames
 - Frame data: MATLAB column-major; MEX functions handle transpose to/from row-major
 - Grayscale frames: height × width (single) or height × width × num_frames (batch)
@@ -62,7 +62,7 @@ MEX functions pass FFmpeg context pointers between calls via a MATLAB struct.
 
 ## Important Files
 - `modpath.m`: Path setup utility
-- `+h265/from_ufmf.m`: Converts UFMF files to H.265, processing frames in configurable blocks
+- `+h265/from_ufmf.m`: Converts UFMF files to h.265, processing frames in configurable blocks
 
 ## Matlab coding conventions
 - Indents should all be two spaces.  Top-level functions should not be indented.  Never use tabs.

@@ -1,4 +1,4 @@
-# Makefile for compiling MEX functions for H.265 video reading and writing
+# Makefile for compiling MEX functions for h.265 video reading and writing
 #
 # Usage:
 #   make          - Build all MEX files
@@ -71,7 +71,7 @@ read_h265_frames.$(MEXEXT): read_h265_frames.c $(DECODE_HDR) $(DECODE_SRC)
 close_h265_video.$(MEXEXT): close_h265_video.c $(CACHE_HDR)
 	$(MEX) $< $(LIBS_BASE)
 
-# H.265 writing functions
+# h.265 writing functions
 open_h265_write.$(MEXEXT): open_h265_write.c
 	$(MEX) $< $(LIBS_SCALE)
 

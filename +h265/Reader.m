@@ -1,5 +1,5 @@
 classdef Reader < handle
-  % READER Wrapper for H.265 video reading MEX functions
+  % READER Wrapper for h.265 video reading MEX functions
   %   Ensures proper resource cleanup when object is destroyed.
   %
   %   Example (RGB, the default):

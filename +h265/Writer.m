@@ -1,5 +1,5 @@
 classdef Writer < handle
-  % WRITER Wrapper for H.265 video writing MEX functions
+  % WRITER Wrapper for h.265 video writing MEX functions
   %   Ensures proper resource cleanup when object is destroyed.
   %
   %   Example (RGB color, the default):

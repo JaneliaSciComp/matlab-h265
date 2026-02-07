@@ -1,6 +1,6 @@
 # matlab-h265
 
-A MATLAB library for reading and writing H.265 (HEVC) video files,
+A MATLAB library for reading and writing h.265 (HEVC) video files,
 designed for machine vision applications.
 
 ## Requirements
@@ -47,6 +47,10 @@ frame = reader.read(1);            % read single frame
 frames = reader.read(1, 100);      % read frames 1-100
 % reader closes automatically when it goes out of scope
 ```
+
+**Note:** The Reader only supports h.265 files encoded with closed GOPs.
+Videos created with `h265.Writer` use closed GOPs, but arbitrary h.265
+files from other sources will likely not work.
 
 ### Converting from UFMF
 

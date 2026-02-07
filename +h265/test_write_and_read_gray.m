@@ -1,6 +1,6 @@
 function test_write_and_read_gray()
 % TEST_WRITE_AND_READ_GRAY Test grayscale video writing and reading
-%   Generates random grayscale frames, writes to H.265, reads back, and
+%   Generates random grayscale frames, writes to h.265, reads back, and
 %   verifies using SSIM (Structural Similarity Index). Throws error on failure.
 
 % Create temp directory and ensure cleanup on exit (normal or error)

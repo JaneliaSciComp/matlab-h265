@@ -1,6 +1,6 @@
 function test_write_and_read_rgb()
 % TEST_WRITE_AND_READ_RGB Test RGB video writing and reading
-%   Generates random RGB frames, writes to H.265, reads back, and
+%   Generates random RGB frames, writes to h.265, reads back, and
 %   verifies using SSIM (Structural Similarity Index). Throws error on failure.
 
 % Create temp directory and ensure cleanup on exit (normal or error)

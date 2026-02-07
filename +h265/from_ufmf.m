@@ -1,10 +1,10 @@
 function h265_from_ufmf(h265_file, ufmf_file, varargin)
-% H265_FROM_UFMF Convert a UFMF file to H.265 video
+% H265_FROM_UFMF Convert a UFMF file to h.265 video
 %
 %   h265_from_ufmf(h265_file, ufmf_file)
 %   h265_from_ufmf(h265_file, ufmf_file, 'block_size', 1000)
 %
-%   Reads frames from a UFMF file in blocks and writes them to an H.265
+%   Reads frames from a UFMF file in blocks and writes them to an h.265
 %   encoded MP4 file.
 %
 %   Arguments:
@@ -53,7 +53,7 @@ else
   num_frames = min(frame_count, header.nframes);
 end
 
-% Create H.265 writer
+% Create h.265 writer
 writer = h265.Writer(h265_file, width, height, frame_rate, 'is_gray', ~is_color);
 
 % Process frames in blocks
@@ -85,7 +85,7 @@ for block = 1:num_blocks
     end
   end
 
-  % Write block to H.265
+  % Write block to h.265
   writer.write(block_data);
 
   frames_written = frames_written + frames_in_block;
