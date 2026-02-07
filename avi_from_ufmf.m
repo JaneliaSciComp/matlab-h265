@@ -44,9 +44,6 @@ for i = 1:num_frames
   end
 end
 
-% Cleanup: vw closes automatically, header_cleanup closes file
-clear vw header_cleanup;
-
 fprintf('Done. Output written to %s\n', output_file);
 
 end  % function

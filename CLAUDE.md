@@ -64,3 +64,11 @@ MEX functions pass FFmpeg context pointers between calls via a MATLAB struct.
 - switch statements that check for multiple enumerated cases should enumerate all the handled cases explicitly, and throw an error in the "otherwise:" clause.  This makes it easier to find inappropriately-handled cases when testing.
 - When creating a resource that needs later cleanup, *always* use an `onCleanup()` call immediately after acquiring the resource.  But note that this is not
   needed when creating objects like VideoWriter, since they have `delete()` methods that will be called when they go out of scope.
+- Avoid the use of `clear` in functions.  Use the `delete()` method for objects or set the variable to `[]`.
+- Test functions (besides `test_all()`) should take zero arguments and return zero arguments, but must error if something fails.  Sometimes this will require setting a somewhat arbitrary threshold for what counts as failure.
+- Test functions (besides `test_all()`) should not produce a lot of fprintf() output.  Success or failure is the main thing.
+- Logical variables should start with some conjugation of "to be" or "to do".  E.g. `is_gray`, `does_need_flush`.
+- Index variables should end in `_index`
+- Variable that are the count of something should end in `_count`, with a singular stem.  E.g.  `frame_count` instead of `num_frames` or `frames_count`.
+- When running `matlab -batch <command>`, there's no need to add the `-nodisplay` option, as it is implied by `-batch`
+- When running `matlab -batch <command>`, the <command> cannot contain newlines.  To do something longer, write a .m file and call it in <command>.

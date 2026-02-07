@@ -66,17 +66,19 @@ static int ensure_cache_capacity(H265FrameCache *cache, int new_capacity)
 {
     if (!cache || new_capacity <= cache->capacity) return 1;
 
-    uint8_t *new_data = (uint8_t *)realloc(*cache->frame_data,
-                                            new_capacity * cache->frame_size);
-    int *new_indices = (int *)realloc(*cache->frame_indices,
-                                       new_capacity * sizeof(int));
+    uint8_t *new_data = (uint8_t *)mxRealloc(*cache->frame_data,
+                                              new_capacity * cache->frame_size);
+    int *new_indices = (int *)mxRealloc(*cache->frame_indices,
+                                         new_capacity * sizeof(int));
 
     if (!new_data || !new_indices) {
-        if (new_data && new_data != *cache->frame_data) free(new_data);
-        if (new_indices && new_indices != *cache->frame_indices) free(new_indices);
+        if (new_data && new_data != *cache->frame_data) mxFree(new_data);
+        if (new_indices && new_indices != *cache->frame_indices) mxFree(new_indices);
         return 0;
     }
 
+    mexMakeMemoryPersistent(new_data);
+    mexMakeMemoryPersistent(new_indices);
     *cache->frame_data = new_data;
     *cache->frame_indices = new_indices;
     cache->capacity = new_capacity;
@@ -160,6 +162,9 @@ static int decode_gop_to_cache(
                 convert_frame_to_matlab(state->out_frame, state->width,
                                         state->height, state->is_grayscale, temp_frame);
 
+                /* Release decoder's internal buffer reference */
+                av_frame_unref(state->frame);
+
                 if (cache->num_frames >= cache->capacity) {
                     if (!ensure_cache_capacity(cache, cache->capacity * 2)) {
                         mxFree(temp_frame);
@@ -176,7 +181,7 @@ static int decode_gop_to_cache(
         av_packet_unref(state->pkt);
     }
 
-    /* Flush decoder */
+    /* Flush decoder to get any remaining buffered frames */
     if (!found_target) {
         avcodec_send_packet(codec_ctx, NULL);
         while (1) {
@@ -194,6 +199,9 @@ static int decode_gop_to_cache(
             convert_frame_to_matlab(state->out_frame, state->width,
                                     state->height, state->is_grayscale, temp_frame);
 
+            /* Release decoder's internal buffer reference */
+            av_frame_unref(state->frame);
+
             if (cache->num_frames >= cache->capacity) {
                 ensure_cache_capacity(cache, cache->capacity * 2);
             }
@@ -204,6 +212,9 @@ static int decode_gop_to_cache(
             }
         }
     }
+
+    /* Always flush decoder buffers to release internal frame references */
+    avcodec_flush_buffers(codec_ctx);
 
     mxFree(temp_frame);
     return found_target ? 0 : -1;

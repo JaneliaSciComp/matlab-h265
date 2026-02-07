@@ -10,8 +10,9 @@ this_dir = fileparts(this_file);
 files = dir(fullfile(this_dir, 'test*.m'));
 test_names = {files.name};
 
-% Remove test_all.m from the list
+% Remove test_all.m and slow tests from the list
 test_names = test_names(~strcmp(test_names, 'test_all.m'));
+test_names = test_names(~strcmp(test_names, 'test_memory_leaks.m'));
 
 % Remove .m extension to get function names
 test_funcs = cellfun(@(x) x(1:end-2), test_names, 'UniformOutput', false);

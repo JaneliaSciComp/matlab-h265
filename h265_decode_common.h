@@ -206,6 +206,9 @@ static inline int decode_frame_range(
                         frames_captured++;
                     }
                 }
+
+                /* Release decoder's internal buffer reference */
+                av_frame_unref(state->frame);
             }
         }
         av_packet_unref(state->pkt);
@@ -237,6 +240,9 @@ static inline int decode_frame_range(
                     frames_captured++;
                 }
             }
+
+            /* Release decoder's internal buffer reference */
+            av_frame_unref(state->frame);
         }
     }
 
