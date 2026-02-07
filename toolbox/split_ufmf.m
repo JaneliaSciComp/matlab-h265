@@ -80,7 +80,7 @@ for outi = 1:noutfiles,
   
   % write the index
   wrapupUFMF(fidout,index,header.indexlocloc);
-  clear fidout_cleanup;  % close output file
+  delete(fidout_cleanup);  % close output file
 
 end
 % header_cleanup will close header.fid when function returns

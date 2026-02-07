@@ -6,7 +6,7 @@ classdef H265Reader < handle
   %       vid = H265Reader('movie.mp4');
   %       frame = vid.read(1);
   %       frames = vid.read(1, 100);  % batch read
-  %       clear vid;  % automatically closes
+  %       % vid closes automatically when it goes out of scope
   %
   %   Example (grayscale):
   %       vid = H265Reader('gray_movie.mp4', 'is_gray', true);

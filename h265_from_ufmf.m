@@ -93,8 +93,7 @@ for block = 1:num_blocks
     100 * frames_written / num_frames);
 end
 
-% Cleanup: writer closes automatically, header_cleanup closes file
-clear writer header_cleanup;
+% writer and header_cleanup close automatically when function returns
 
 fprintf('Done. Output: %s\n', h265_file);
 end

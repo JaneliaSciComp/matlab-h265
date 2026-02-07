@@ -5,12 +5,12 @@ classdef H265Writer < handle
   %   Example (RGB color, the default):
   %       vid = H265Writer('output.mp4', 640, 480, 30);
   %       vid.write(rgb_frame);  % height x width x 3 uint8
-  %       clear vid;
+  %       % vid flushes and closes automatically when it goes out of scope
   %
   %   Example (grayscale):
   %       vid = H265Writer('output.mp4', 640, 480, 30, 'is_gray', true);
   %       vid.write(gray_frame);  % height x width uint8
-  %       clear vid;
+  %       % vid flushes and closes automatically when it goes out of scope
 
   properties (SetAccess = private)
     filename

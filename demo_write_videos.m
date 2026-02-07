@@ -18,7 +18,7 @@ writer = H265Writer('test_gray.mp4', width, height, frame_rate, 'is_gray', true)
 for i = 1:frame_count
   writer.write(gray_frames(:,:,i));
 end
-clear writer;
+delete(writer);
 fprintf('  Written %d frames\n', frame_count);
 
 % Generate RGB frames (low-pass filtered for realistic content)
@@ -32,7 +32,7 @@ writer = H265Writer('test_rgb.mp4', width, height, frame_rate);
 for i = 1:frame_count
   writer.write(rgb_frames(:,:,:,i));
 end
-clear writer;
+delete(writer);
 fprintf('  Written %d frames\n', frame_count);
 
 fprintf('Done.\n');

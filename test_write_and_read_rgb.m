@@ -39,7 +39,7 @@ end
 assert(writer.frames_written == frame_count, 'Writer frames_written mismatch');
 assert(abs(writer.duration() - frame_count/frame_rate) < 0.001, 'Writer duration mismatch');
 
-clear writer;  % Flush and close
+delete(writer);  % Flush and close
 
 % Read back the file
 reader = H265Reader(output_file);
@@ -87,8 +87,6 @@ for i = 1:random_frame_count
   end
 end
 
-clear reader;
-
 % Compute SSIM for each frame (average across channels)
 ssim_values = zeros(frame_count, 1);
 for i = 1:frame_count
@@ -116,13 +114,12 @@ writer2 = H265Writer(output_file2, width2, height2, frame_rate2);
 for i = 1:frame_count2
   writer2.write(uint8(randi([0 255], height2, width2, 3)));
 end
-clear writer2;
+delete(writer2);
 
 reader2 = H265Reader(output_file2);
 assert(reader2.num_frames == frame_count2, 'Second file frame count mismatch');
 assert(reader2.width == width2, 'Second file width mismatch');
 assert(reader2.height == height2, 'Second file height mismatch');
 assert(reader2.frame_rate == frame_rate2, 'Second file frame_rate mismatch');
-clear reader2;
 
 end
