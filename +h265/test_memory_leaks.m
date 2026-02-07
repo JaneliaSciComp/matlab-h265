@@ -1,5 +1,5 @@
 function test_memory_leaks(varargin)
-% TEST_MEMORY_LEAKS Check for memory leaks in H265Reader cache implementation
+% TEST_MEMORY_LEAKS Check for memory leaks in h265.Reader cache implementation
 %
 % This test:
 %   1. Creates a test video with many GOPs
@@ -18,7 +18,7 @@ test_file = create_test_video();
 test_cleanup = onCleanup(@() delete(test_file)); %#ok<NASGU>
 
 % Get video info
-reader = H265Reader(test_file, 'is_gray', true);
+reader = h265.Reader(test_file, 'is_gray', true);
 num_frames = reader.num_frames;
 reader = []; %#ok<NASGU>
 
@@ -30,7 +30,7 @@ end
 warmup_cycle_count = 100;
 warmup_memory_samples = zeros(1, warmup_cycle_count);
 for warmup_cycle_index = 1:warmup_cycle_count
-  reader = H265Reader(test_file, 'is_gray', true);
+  reader = h265.Reader(test_file, 'is_gray', true);
   for j = 1:20
     frame = reader.read(randi(num_frames)); %#ok<NASGU>
   end
@@ -47,7 +47,7 @@ end
 cycle_count = 200;
 memory_samples = zeros(1, cycle_count);
 for cycle_index = 1:cycle_count
-  reader = H265Reader(test_file, 'is_gray', true);
+  reader = h265.Reader(test_file, 'is_gray', true);
   for j = 1:20
     frame = reader.read(randi(num_frames)); %#ok<NASGU>
   end
@@ -133,7 +133,7 @@ gop_size = 30;
 
 frames = uint8(randi([0 255], height, width, frame_count));
 
-writer = H265Writer(filename, width, height, frame_rate, 'is_gray', true, 'gop_size', gop_size);
+writer = h265.Writer(filename, width, height, frame_rate, 'is_gray', true, 'gop_size', gop_size);
 writer.write(frames);
 writer = [];  %#ok<NASGU> Release handle to trigger destructor
 

@@ -15,6 +15,7 @@ modpath();  % Sets up Matlab path
 
 ### Building MEX Files
 ```bash
+cd +h265
 make              # Build out-of-date MEX files
 make clean        # Delete all MEX files
 make rebuild      # Clean and rebuild all
@@ -23,16 +24,19 @@ Requires FFmpeg development libraries: libavformat, libavcodec, libavutil, libsw
 
 ### Running Tests
 ```matlab
-test_all()             % Run all tests
+h265.test_all()        % Run all tests
 ```
 
 ## Architecture
 
-### MATLAB Classes (High-Level API)
-- **H265Reader**: Read H.265 video files. Supports single frame or batch reads. Optional `is_gray` flag for grayscale output.
-- **H265Writer**: Write H.265 video files. Supports single frame or batch writes. Defaults to grayscale; pass `is_color=true` for RGB.
+### MATLAB Package (h265)
+All H.265 functionality is in the `h265` package (`+h265/` folder):
 
-### MEX Functions (Low-Level C API)
+**Classes (High-Level API)**
+- **h265.Reader**: Read H.265 video files. Supports single frame or batch reads. Optional `is_gray` flag for grayscale output.
+- **h265.Writer**: Write H.265 video files. Supports single frame or batch writes. Defaults to RGB; pass `is_gray=true` for grayscale.
+
+**MEX Functions (Low-Level C API)**
 Reading: `open_h265_video.c` → `read_h265_frame.c` / `read_h265_frames.c` → `close_h265_video.c`
 
 Writing: `open_h265_write.c` → `write_h265_frames.c` → `close_h265_write.c`
@@ -47,11 +51,12 @@ MEX functions pass FFmpeg context pointers between calls via a MATLAB struct.
 - RGB frames: height × width × 3 (single) or height × width × 3 × num_frames (batch)
 
 ## Key Directories
+- `+h265/`: MATLAB package containing Reader, Writer classes, MEX functions, Makefile, and tests
 - `toolbox/`: Contains general utilities and functions for reading/writing .ufmf files
 
 ## Important Files
 - `modpath.m`: Path setup utility
-- `h265_from_ufmf.m`: Converts UFMF files to H.265, processing frames in configurable blocks
+- `+h265/from_ufmf.m`: Converts UFMF files to H.265, processing frames in configurable blocks
 
 ## Matlab coding conventions
 - Indents should all be two spaces.  Top-level functions should not be indented.  Never use tabs.

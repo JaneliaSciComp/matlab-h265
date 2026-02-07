@@ -14,8 +14,8 @@ test_names = {files.name};
 test_names = test_names(~strcmp(test_names, 'test_all.m'));
 test_names = test_names(~strcmp(test_names, 'test_memory_leaks.m'));
 
-% Remove .m extension to get function names
-test_funcs = cellfun(@(x) x(1:end-2), test_names, 'UniformOutput', false);
+% Remove .m extension and add h265. prefix for package functions
+test_funcs = cellfun(@(x) ['h265.' x(1:end-2)], test_names, 'UniformOutput', false);
 
 num_tests = length(test_funcs);
 passed = {};

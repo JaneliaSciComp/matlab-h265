@@ -54,7 +54,7 @@ else
 end
 
 % Create H.265 writer
-writer = H265Writer(h265_file, width, height, frame_rate, 'is_gray', ~is_color);
+writer = h265.Writer(h265_file, width, height, frame_rate, 'is_gray', ~is_color);
 
 % Process frames in blocks
 num_blocks = ceil(num_frames / block_size);

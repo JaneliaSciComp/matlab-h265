@@ -1,15 +1,15 @@
-classdef H265Reader < handle
-  % H265READER Wrapper for H.265 video reading MEX functions
+classdef Reader < handle
+  % READER Wrapper for H.265 video reading MEX functions
   %   Ensures proper resource cleanup when object is destroyed.
   %
   %   Example (RGB, the default):
-  %       vid = H265Reader('movie.mp4');
+  %       vid = h265.Reader('movie.mp4');
   %       frame = vid.read(1);
   %       frames = vid.read(1, 100);  % batch read
   %       % vid closes automatically when it goes out of scope
   %
   %   Example (grayscale):
-  %       vid = H265Reader('gray_movie.mp4', 'is_gray', true);
+  %       vid = h265.Reader('gray_movie.mp4', 'is_gray', true);
 
   properties (SetAccess = private)
     filename
@@ -33,10 +33,10 @@ classdef H265Reader < handle
   end
 
   methods
-    function obj = H265Reader(filename, varargin)
-      % H265READER Open a video file for reading
-      %   vid = H265Reader(filename)
-      %   vid = H265Reader(filename, 'is_gray', true)
+    function obj = Reader(filename, varargin)
+      % READER Open a video file for reading
+      %   vid = h265.Reader(filename)
+      %   vid = h265.Reader(filename, 'is_gray', true)
       %
       %   Optional parameters:
       %     is_gray - boolean (default: auto-detect from file metadata,
@@ -45,7 +45,7 @@ classdef H265Reader < handle
 
       is_gray = myparse(varargin, 'is_gray', []);
 
-      obj.video_info = open_h265_video(filename);
+      obj.video_info = h265.open_h265_video(filename);
 
       % If is_gray not explicitly set, use metadata from file (if available)
       if isempty(is_gray)
@@ -81,16 +81,16 @@ classdef H265Reader < handle
 
       if nargin < 3
         % Single frame
-        frame = read_h265_frame(obj.video_info, start_frame);
+        frame = h265.read_h265_frame(obj.video_info, start_frame);
       else
         % Batch read
-        frame = read_h265_frames(obj.video_info, start_frame, end_frame);
+        frame = h265.read_h265_frames(obj.video_info, start_frame, end_frame);
       end
     end
 
     function delete(obj)
       % DELETE Destructor - ensures resources are freed
-      close_h265_video(obj.video_info);
+      h265.close_h265_video(obj.video_info);
     end
 
     function fr = get.frame_rate(obj)
