@@ -1,7 +1,11 @@
 # matlab-h265
 
 A MATLAB library for reading and writing h.265 (HEVC) video files,
-designed for machine vision applications.
+designed for machine vision applications. Provides cross-platform h.265
+support with no dependence on GStreamer or other system video frameworks
+(besides FFmpeg, that is). A key goal is for random access to individual
+frames to be 100% reliable and repeatable; for this reason we use only
+software encoding and decoding.
 
 ## Requirements
 
