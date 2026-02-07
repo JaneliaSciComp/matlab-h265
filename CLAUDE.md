@@ -14,9 +14,10 @@ modpath();  % Sets up Matlab path
 ```
 
 ### Building MEX Files
-```matlab
-build_mex              % Build out-of-date MEX files
-build_mex('--clean')   % Delete all MEX files
+```bash
+make              # Build out-of-date MEX files
+make clean        # Delete all MEX files
+make rebuild      # Clean and rebuild all
 ```
 Requires FFmpeg development libraries: libavformat, libavcodec, libavutil, libswscale.
 
