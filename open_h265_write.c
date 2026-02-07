@@ -160,7 +160,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 
     /* Set x265 params for closed GOP, quality, and suppress info messages */
     char x265_params[256];
-    snprintf(x265_params, sizeof(x265_params), "log-level=warning:no-open-gop=1:keyint=%d:crf=%d", gop_size, crf);
+    snprintf(x265_params, sizeof(x265_params), "log-level=error:no-open-gop=1:keyint=%d:crf=%d", gop_size, crf);
     ret = av_opt_set(codec_ctx->priv_data, "x265-params", x265_params, 0);
     if (ret < 0) {
         avcodec_free_context(&codec_ctx);
