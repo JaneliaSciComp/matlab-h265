@@ -6,15 +6,13 @@
  * Optimization: Uses GOP frame cache stored in video_info. Subsequent requests
  * for frames in the same GOP are served from cache without re-decoding.
  *
+ * Uses row-major decoding internally for cache efficiency, then calls
+ * MATLAB's permute/transpose to return properly oriented column-major data.
+ *
  * Usage: frame = read_h265_frame(video_info, frame_index)
  *   video_info  - struct returned by open_h265_video
  *   frame_index - 1-based frame index
- *   frame       - grayscale (width x height) or RGB (3 x width x height) uint8
- *                 Output is row-major; caller should use permute().
- *
- * NOTE: Output is in row-major order for performance. Caller should use:
- *   permute(frame, [2 1])       for grayscale -> (height x width)
- *   permute(frame, [3 2 1])     for RGB -> (height x width x 3)
+ *   frame       - grayscale (height x width) or RGB (height x width x 3) uint8
  *
  * Compile with:
  *   mex read_h265_frame.c -lavformat -lavcodec -lavutil -lswscale
@@ -97,6 +95,41 @@ static void init_cache_format(H265FrameCache *cache, int width, int height, int 
     cache->height = height;
     cache->is_grayscale = is_grayscale;
     cache->frame_size = is_grayscale ? (size_t)width * height : (size_t)width * height * 3;
+}
+
+/*
+ * Create output array from cached row-major data and permute to column-major.
+ */
+static mxArray *create_output_from_cache(H265FrameCache *cache, int cache_idx,
+                                          int width, int height, int is_grayscale)
+{
+    mxArray *rowmajor;
+    if (is_grayscale) {
+        rowmajor = mxCreateNumericMatrix(width, height, mxUINT8_CLASS, mxREAL);
+    } else {
+        mwSize dims[3] = {3, width, height};
+        rowmajor = mxCreateNumericArray(3, dims, mxUINT8_CLASS, mxREAL);
+    }
+    memcpy(mxGetData(rowmajor), get_cache_frame(cache, cache_idx), cache->frame_size);
+
+    /* Call MATLAB to permute/transpose */
+    mxArray *result;
+    if (is_grayscale) {
+        /* Use transpose (.') for 2D - equivalent to permute([2 1]) */
+        mexCallMATLAB(1, &result, 1, &rowmajor, "transpose");
+    } else {
+        /* permute([3 2 1]) for RGB */
+        mxArray *perm_args[2];
+        perm_args[0] = rowmajor;
+        perm_args[1] = mxCreateDoubleMatrix(1, 3, mxREAL);
+        double *perm = mxGetPr(perm_args[1]);
+        perm[0] = 3; perm[1] = 2; perm[2] = 1;
+        mexCallMATLAB(1, &result, 2, perm_args, "permute");
+        mxDestroyArray(perm_args[1]);
+    }
+
+    mxDestroyArray(rowmajor);
+    return result;
 }
 
 /* ============================================================================
@@ -307,14 +340,8 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     if (cache_initialized) {
         int cache_idx = find_in_cache(cache, target_frame);
         if (cache_idx >= 0) {
-            /* Cache hit - return row-major data (caller will permute) */
-            if (is_grayscale) {
-                plhs[0] = mxCreateNumericMatrix(width, height, mxUINT8_CLASS, mxREAL);
-            } else {
-                mwSize dims[3] = {3, width, height};
-                plhs[0] = mxCreateNumericArray(3, dims, mxUINT8_CLASS, mxREAL);
-            }
-            memcpy(mxGetData(plhs[0]), get_cache_frame(cache, cache_idx), cache->frame_size);
+            /* Cache hit - permute and return */
+            plhs[0] = create_output_from_cache(cache, cache_idx, width, height, is_grayscale);
             return;
         }
     }
@@ -345,16 +372,10 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         mexErrMsgIdAndTxt("read_h265_frame:decode", "Error decoding GOP");
     }
 
-    /* Return frame from cache - row-major data (caller will permute) */
+    /* Return frame from cache - permute and return */
     int cache_idx = find_in_cache(cache, target_frame);
     if (cache_idx >= 0) {
-        if (is_grayscale) {
-            plhs[0] = mxCreateNumericMatrix(width, height, mxUINT8_CLASS, mxREAL);
-        } else {
-            mwSize dims[3] = {3, width, height};
-            plhs[0] = mxCreateNumericArray(3, dims, mxUINT8_CLASS, mxREAL);
-        }
-        memcpy(mxGetData(plhs[0]), get_cache_frame(cache, cache_idx), cache->frame_size);
+        plhs[0] = create_output_from_cache(cache, cache_idx, width, height, is_grayscale);
         return;
     }
 

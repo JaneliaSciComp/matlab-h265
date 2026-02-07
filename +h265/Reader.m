@@ -80,21 +80,11 @@ classdef Reader < handle
       %   Frame indices are 1-based.
 
       if nargin < 3
-        % Single frame (MEX returns row-major, permute to column-major)
+        % Single frame
         frame = h265.read_h265_frame(obj.video_info, start_frame);
-        if obj.is_gray
-          frame = frame.';
-        else
-          frame = permute(frame, [3 2 1]);
-        end
       else
-        % Batch read (MEX returns row-major, permute to column-major)
+        % Batch read
         frame = h265.read_h265_frames(obj.video_info, start_frame, end_frame);
-        if obj.is_gray
-          frame = permute(frame, [2 1 3]);
-        else
-          frame = permute(frame, [3 2 1 4]);
-        end
       end
     end
 

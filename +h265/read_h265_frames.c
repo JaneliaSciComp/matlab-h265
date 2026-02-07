@@ -3,16 +3,15 @@
  * MEX function to read a contiguous range of frames efficiently.
  * Seeks once to the start, then decodes sequentially through the range.
  *
+ * Uses row-major decoding internally for cache efficiency, then calls
+ * MATLAB's permute() to return properly oriented column-major data.
+ *
  * Usage: frames = read_h265_frames(video_info, start_frame, end_frame)
  *   video_info  - struct returned by open_h265_video
  *   start_frame - 1-based starting frame index
  *   end_frame   - 1-based ending frame index (inclusive)
- *   frames      - grayscale: uint8 3D array (width x height x num_frames)
- *                 RGB: uint8 4D array (3 x width x height x num_frames)
- *
- * NOTE: Output is in row-major order for performance. Caller should use:
- *   permute(frames, [2 1 3])     for grayscale -> (height x width x num_frames)
- *   permute(frames, [3 2 1 4])   for RGB -> (height x width x 3 x num_frames)
+ *   frames      - grayscale: uint8 3D array (height x width x num_frames)
+ *                 RGB: uint8 4D array (height x width x 3 x num_frames)
  *
  * Compile with:
  *   mex read_h265_frames.c -lavformat -lavcodec -lavutil -lswscale
@@ -117,29 +116,35 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
                         codec_ctx->pix_fmt == AV_PIX_FMT_GRAY16LE);
     }
 
-    /* Create output array with swapped dimensions for row-major storage */
+    /* Create temporary row-major array */
+    mxArray *rowmajor;
     uint8_t *out_data;
     size_t frame_size;
+    int perm_ndims;
+
     if (is_grayscale) {
-        /* width x height x frames (caller permutes to height x width x frames) */
+        /* width x height x frames -> permute to height x width x frames */
         mwSize dims[3] = {width, height, num_frames_to_read};
-        plhs[0] = mxCreateNumericArray(3, dims, mxUINT8_CLASS, mxREAL);
+        rowmajor = mxCreateNumericArray(3, dims, mxUINT8_CLASS, mxREAL);
         frame_size = (size_t)height * width;
+        perm_ndims = 3;
     } else {
-        /* 3 x width x height x frames (caller permutes to height x width x 3 x frames) */
+        /* 3 x width x height x frames -> permute to height x width x 3 x frames */
         mwSize dims[4] = {3, width, height, num_frames_to_read};
-        plhs[0] = mxCreateNumericArray(4, dims, mxUINT8_CLASS, mxREAL);
+        rowmajor = mxCreateNumericArray(4, dims, mxUINT8_CLASS, mxREAL);
         frame_size = (size_t)height * width * 3;
+        perm_ndims = 4;
     }
-    out_data = (uint8_t *)mxGetData(plhs[0]);
+    out_data = (uint8_t *)mxGetData(rowmajor);
 
     /* Initialize decode state */
     H265DecodeState state;
     if (!init_decode_state(&state, codec_ctx, width, height, is_grayscale)) {
+        mxDestroyArray(rowmajor);
         mexErrMsgIdAndTxt("read_h265_frames:allocDecode", "Could not initialize decoder");
     }
 
-    /* Decode frames in row-major order (fast memcpy, caller does permute) */
+    /* Decode frames in row-major order (fast memcpy) */
     int frames_captured = decode_frame_range_rowmajor(
         fmt_ctx, codec_ctx, video_stream_idx,
         dts_array, pts_increment,
@@ -149,12 +154,33 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     free_decode_state(&state);
 
     if (frames_captured < 0) {
+        mxDestroyArray(rowmajor);
         mexErrMsgIdAndTxt("read_h265_frames:decode", "Error during decoding");
     }
 
     if (frames_captured < num_frames_to_read) {
+        mxDestroyArray(rowmajor);
         mexErrMsgIdAndTxt("read_h265_frames:notFound",
             "Only captured %d of %d frames (%d missing)",
             frames_captured, num_frames_to_read, num_frames_to_read - frames_captured);
     }
+
+    /* Call MATLAB's permute to convert to column-major */
+    mxArray *perm_args[2];
+    perm_args[0] = rowmajor;
+    perm_args[1] = mxCreateDoubleMatrix(1, perm_ndims, mxREAL);
+    double *perm = mxGetPr(perm_args[1]);
+
+    if (is_grayscale) {
+        /* [2 1 3]: width x height x frames -> height x width x frames */
+        perm[0] = 2; perm[1] = 1; perm[2] = 3;
+    } else {
+        /* [3 2 1 4]: 3 x width x height x frames -> height x width x 3 x frames */
+        perm[0] = 3; perm[1] = 2; perm[2] = 1; perm[3] = 4;
+    }
+
+    mexCallMATLAB(1, &plhs[0], 2, perm_args, "permute");
+
+    mxDestroyArray(rowmajor);
+    mxDestroyArray(perm_args[1]);
 }
