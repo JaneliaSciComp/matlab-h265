@@ -3,9 +3,8 @@
  * Common decoding routines shared by read_h265_frame.c and read_h265_frames.c.
  *
  * Provides:
- * - Frame conversion from FFmpeg format to MATLAB column-major format
  * - Decode state management (allocation/cleanup of AVFrame, AVPacket, SwsContext)
- * - Simple frame range decoding
+ * - Frame range decoding with row-major output
  */
 
 #ifndef H265_DECODE_COMMON_H
@@ -39,14 +38,6 @@ typedef struct {
  * ============================================================================ */
 
 /*
- * Convert an FFmpeg frame to MATLAB column-major format.
- * Handles both grayscale and RGB output.
- * NOTE: This is slow due to strided memory access.
- */
-void convert_frame_to_matlab(AVFrame *out_frame, int width, int height,
-                             int is_grayscale, uint8_t *out_data);
-
-/*
  * Copy an FFmpeg frame in row-major order (fast sequential memcpy).
  * Caller should use MATLAB permute() to convert to column-major.
  * For grayscale: output is width x height (use permute([2 1]))
@@ -65,28 +56,6 @@ int init_decode_state(H265DecodeState *state, AVCodecContext *codec_ctx,
  * Free decode state resources.
  */
 void free_decode_state(H265DecodeState *state);
-
-/*
- * Decode frames in [target_start, target_end] into frame_buffer.
- *
- * Parameters:
- *   fmt_ctx, codec_ctx, video_stream_idx - FFmpeg contexts
- *   dts_array       - DTS lookup table for seeking
- *   pts_increment   - PTS units per frame
- *   target_start    - first frame index to capture (0-based)
- *   target_end      - last frame index to capture (0-based)
- *   state           - initialized decode state
- *   frame_buffer    - output buffer (must hold (target_end - target_start + 1) frames)
- *   frame_size      - size of each frame in bytes
- *
- * Returns: number of frames captured, or -1 on error
- */
-int decode_frame_range(
-    AVFormatContext *fmt_ctx, AVCodecContext *codec_ctx, int video_stream_idx,
-    int64_t *dts_array, int64_t pts_increment,
-    int target_start, int target_end,
-    H265DecodeState *state,
-    uint8_t *frame_buffer, size_t frame_size);
 
 /*
  * Decode frames in [target_start, target_end] into frame_buffer using row-major copy.
