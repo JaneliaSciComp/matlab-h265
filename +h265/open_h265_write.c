@@ -186,6 +186,16 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     codec_ctx->pix_fmt = is_color ? AV_PIX_FMT_YUV420P : AV_PIX_FMT_GRAY8;
     codec_ctx->gop_size = gop_size;
 
+    /* Set tune for fast decoding */
+    ret = av_opt_set(codec_ctx->priv_data, "tune", "fastdecode", 0);
+    if (ret < 0) {
+        avcodec_free_context(&codec_ctx);
+        avformat_free_context(fmt_ctx);
+        mxFree(filename);
+        mexErrMsgIdAndTxt("open_h265_write:tune",
+            "Could not set tune option");
+    }
+
     /* Set x265 params for closed GOP, quality, and suppress info messages */
     char *x265_params = mx_sprintf("log-level=error:no-open-gop=1:keyint=%d:crf=%d", gop_size, crf);
     ret = av_opt_set(codec_ctx->priv_data, "x265-params", x265_params, 0);
