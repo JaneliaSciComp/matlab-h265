@@ -92,9 +92,7 @@ static H265FrameCache *alloc_frame_cache(void)
     mexMakeMemoryPersistent(cache);
 
     cache->frames = NULL;          /* mxArray allocated on first read */
-    cache->frame_indices = NULL;   /* Allocated on first read */
     cache->num_frames = 0;
-    cache->capacity = 0;
     cache->start_frame = -1;
     cache->width = 0;
     cache->height = 0;

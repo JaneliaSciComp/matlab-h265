@@ -29,9 +29,6 @@ static void free_frame_cache(H265FrameCache *cache)
     if (cache->frames) {
         mxDestroyArray(cache->frames);
     }
-    if (cache->frame_indices) {
-        mxFree(cache->frame_indices);
-    }
     mxFree(cache);
 }
 

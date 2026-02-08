@@ -31,13 +31,13 @@
  * Cache Helper Functions
  * ============================================================================ */
 
+/* O(1) cache lookup: frames in cache are consecutive starting at start_frame */
 static int find_in_cache(H265FrameCache *cache, int frame_index)
 {
-    if (!cache || cache->num_frames == 0 || !cache->frame_indices) return -1;
-    for (int i = 0; i < cache->num_frames; i++) {
-        if (cache->frame_indices[i] == frame_index) {
-            return i;
-        }
+    if (!cache || cache->num_frames == 0 || !cache->frames) return -1;
+    if (frame_index >= cache->start_frame &&
+        frame_index < cache->start_frame + cache->num_frames) {
+        return frame_index - cache->start_frame;
     }
     return -1;
 }
@@ -51,20 +51,6 @@ static void clear_cache(H265FrameCache *cache)
     }
     cache->num_frames = 0;
     cache->start_frame = -1;
-}
-
-static int ensure_indices_capacity(H265FrameCache *cache, int new_capacity)
-{
-    if (new_capacity <= cache->capacity) return 1;
-
-    int *new_indices = (int *)mxRealloc(cache->frame_indices,
-                                         new_capacity * sizeof(int));
-    if (!new_indices) return 0;
-
-    mexMakeMemoryPersistent(new_indices);
-    cache->frame_indices = new_indices;
-    cache->capacity = new_capacity;
-    return 1;
 }
 
 /* ============================================================================
@@ -84,17 +70,15 @@ static int decode_gop_to_cache(
     int found_target = 0;
     int first_keyframe_seen = 0;
 
-    /* Temporary storage for frame indices during decode */
+    /* Track GOP boundaries */
     int temp_capacity = 64;
     int temp_count = 0;
-    int *temp_indices = (int *)mxMalloc(temp_capacity * sizeof(int));
-    if (!temp_indices) return -1;
+    int gop_start_frame = -1;
 
     /* Temporary row-major buffer - will grow as needed */
     size_t buffer_capacity = temp_capacity * cache->frame_size;
     uint8_t *temp_buffer = (uint8_t *)mxMalloc(buffer_capacity);
     if (!temp_buffer) {
-        mxFree(temp_indices);
         return -1;
     }
 
@@ -119,6 +103,7 @@ static int decode_gop_to_cache(
                     }
                     /* Haven't found target - reset for new GOP */
                     temp_count = 0;
+                    gop_start_frame = -1;
                 }
                 first_keyframe_seen = 1;
             }
@@ -134,25 +119,24 @@ static int decode_gop_to_cache(
                 if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) break;
                 if (ret < 0) {
                     mxFree(temp_buffer);
-                    mxFree(temp_indices);
                     return -1;
                 }
 
                 int frame_idx = (int)(state->frame->pts / pts_increment);
 
-                /* Grow buffers if needed */
+                /* Track start of GOP */
+                if (gop_start_frame < 0) {
+                    gop_start_frame = frame_idx;
+                }
+
+                /* Grow buffer if needed */
                 if (temp_count >= temp_capacity) {
                     temp_capacity *= 2;
-                    int *new_indices = (int *)mxRealloc(temp_indices, temp_capacity * sizeof(int));
                     uint8_t *new_buffer = (uint8_t *)mxRealloc(temp_buffer, temp_capacity * cache->frame_size);
-                    if (!new_indices || !new_buffer) {
-                        if (new_indices) mxFree(new_indices);
-                        if (new_buffer) mxFree(new_buffer);
+                    if (!new_buffer) {
                         mxFree(temp_buffer);
-                        mxFree(temp_indices);
                         return -1;
                     }
-                    temp_indices = new_indices;
                     temp_buffer = new_buffer;
                 }
 
@@ -167,7 +151,6 @@ static int decode_gop_to_cache(
                                     state->height, state->is_grayscale,
                                     temp_buffer + temp_count * cache->frame_size);
 
-                temp_indices[temp_count] = frame_idx;
                 temp_count++;
 
                 if (frame_idx == target_frame) {
@@ -190,9 +173,12 @@ static int decode_gop_to_cache(
 
             int frame_idx = (int)(state->frame->pts / pts_increment);
 
+            if (gop_start_frame < 0) {
+                gop_start_frame = frame_idx;
+            }
+
             if (temp_count >= temp_capacity) {
                 temp_capacity *= 2;
-                temp_indices = (int *)mxRealloc(temp_indices, temp_capacity * sizeof(int));
                 temp_buffer = (uint8_t *)mxRealloc(temp_buffer, temp_capacity * cache->frame_size);
             }
 
@@ -205,7 +191,6 @@ static int decode_gop_to_cache(
                                 state->height, state->is_grayscale,
                                 temp_buffer + temp_count * cache->frame_size);
 
-            temp_indices[temp_count] = frame_idx;
             temp_count++;
 
             if (frame_idx == target_frame) {
@@ -220,7 +205,6 @@ static int decode_gop_to_cache(
 
     if (!found_target || temp_count == 0) {
         mxFree(temp_buffer);
-        mxFree(temp_indices);
         return -1;
     }
 
@@ -258,17 +242,9 @@ static int decode_gop_to_cache(
     /* Store in cache */
     mexMakeArrayPersistent(permuted);
     cache->frames = permuted;
-
-    /* Store frame indices */
-    if (!ensure_indices_capacity(cache, temp_count)) {
-        mxFree(temp_indices);
-        return -1;
-    }
-    memcpy(cache->frame_indices, temp_indices, temp_count * sizeof(int));
     cache->num_frames = temp_count;
-    cache->start_frame = temp_indices[0];
+    cache->start_frame = gop_start_frame;
 
-    mxFree(temp_indices);
     return 0;
 }
 

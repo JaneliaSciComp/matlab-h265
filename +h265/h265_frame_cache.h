@@ -21,10 +21,8 @@
 
 typedef struct {
     mxArray *frames;         /* MATLAB array holding cached frames (column-major) */
-    int *frame_indices;      /* Frame indices corresponding to cached frames */
     int num_frames;          /* Number of frames currently in cache */
-    int capacity;            /* Allocated capacity for frame_indices */
-    int start_frame;         /* First frame index in cache (for quick lookup) */
+    int start_frame;         /* First frame index in cache */
     int width;
     int height;
     int is_grayscale;        /* Output format: 1 for grayscale, 0 for RGB */
